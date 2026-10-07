@@ -752,15 +752,13 @@ namespace Pulso
                 lista.Add(conta);
                 if (info.Id == "claude")
                 {
-                    var barra = new Botao
+                    var barra = new Chave
                     {
-                        Id = "barra", Texto = minha ? "Desligar" : "Ligar", Desativado = deOutro,
-                        Clique = delegate
+                        Id = "barra", Ligado = minha, Travado = deOutro,
+                        Mudou = v =>
                         {
-                            string erro = Integracao.BarraInstalada() ? Integracao.RemoverBarra() : Integracao.InstalarBarra();
+                            string erro = v ? Integracao.InstalarBarra() : Integracao.RemoverBarra();
                             if (erro != null) MessageBox.Show(this, erro, "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            salvoEm = DateTime.UtcNow;
-                            Invalidate();
                         },
                     };
                     conta.Subs.Add(new KeyValuePair<string, Ctl>("Estimativa ao vivo", NovaChave("estimativa", cfg.Estimativa, v => cfg.Estimativa = v)));
