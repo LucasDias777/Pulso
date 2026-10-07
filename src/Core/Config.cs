@@ -41,7 +41,7 @@ namespace Pulso
         public bool RitmoDiario;               // anel do Claude mostra o ritmo do dia (cota semanal ÷ 7)
         public bool AnelTracejado;             // anel semanal tracejado
         public bool CapsulaAdaptavel;          // cápsula recolhida muda de cor conforme o fundo
-        public bool Arrastavel = true;         // pontinhos/engrenagem/Alt movem o notch; desligado, fica fixo no meio da borda
+        public bool Arrastavel;                // pontinhos/engrenagem/Alt movem o notch; desligado, fica fixo no meio da borda
 
         public static Config Atual = new Config();
 
