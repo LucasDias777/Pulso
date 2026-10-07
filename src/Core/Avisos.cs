@@ -7,6 +7,8 @@ namespace Pulso
     // Avisos no cartão ao lado do notch:
     //  - limite: 80%, 95% e 100% (uma vez por janela), só com valor exato — nunca pela estimativa;
     //  - renovação: a janela voltou depois de pelo menos 10% de uso;
+    //  - ritmo: entre 30% e 80% da sessão de 5h, se no ritmo dos últimos 30 min ela acaba 20 min ou mais
+    //    antes de renovar (uma vez por sessão);
     //  - sessão terminou / está esperando você: só transições vistas ao vivo,
     //    turnos de pelo menos 10 s, e nunca de uma sessão cuja janela você já está olhando.
     class Avisos
@@ -19,6 +21,7 @@ namespace Pulso
         readonly Dictionary<string, DateTime> ultimaRenovacao = new Dictionary<string, DateTime>();
         readonly Dictionary<string, Atividade> estadoSessao = new Dictionary<string, Atividade>();
         readonly Dictionary<string, DateTime> trabalhandoDesde = new Dictionary<string, DateTime>();
+        readonly Dictionary<string, DateTime> ritmoAvisado = new Dictionary<string, DateTime>();   // janela → renovação já avisada
         static readonly double[] Limiares = { 0.80, 0.95, 1.0 };
         // Leitura restaurada do disco ao abrir não serve de "antes": comparar com ela inventa renovação
         readonly DateTime abertura = DateTime.UtcNow;
@@ -37,6 +40,7 @@ namespace Pulso
             {
                 var p = Estado.Copia(id);
                 if (p.Confirmado.HasValue && p.Confirmado.Value >= abertura) Janelas(p, cfg, pal);
+                if (cfg.AvisoRitmo) RitmoAlto(p, pal);
                 Sessoes(p, cfg, pal);
             }
         }
@@ -89,6 +93,36 @@ namespace Pulso
                 }
                 visto[chave] = new Visto { Uso = uso, Reset = j.ResetaEm };
             }
+        }
+
+        // Projeção pela velocidade recente (pontos por hora): dá tempo de desacelerar antes dos avisos de 80%/95%
+        void RitmoAlto(Provedor p, Paleta pal)
+        {
+            var j = p.Janelas.FirstOrDefault(x => x.Minutos == 300 && !x.Semanal);
+            if (j == null || !j.ResetaEm.HasValue || !p.RitmoHora.HasValue || p.RitmoHora.Value <= 0 || !p.Confirmado.HasValue) return;
+            var agora = DateTime.UtcNow;
+            if ((agora - p.Confirmado.Value).TotalMinutes > 30) return; // leitura velha não projeta nada
+            double atual = Math.Min(1, j.Atual);
+            if (atual < 0.30 || atual >= 0.80) return;                  // cedo demais / o aviso de 80% já cobre
+            var esgota = agora.AddHours((1 - atual) / p.RitmoHora.Value);
+            var sobra = j.ResetaEm.Value - esgota;
+            if (sobra.TotalMinutes < 20) return;
+            string chave = p.Id + "|" + j.Id;
+            DateTime avisada;
+            // A renovação do Claude oscila alguns segundos entre leituras: mesma sessão se perto da já avisada
+            if (ritmoAvisado.TryGetValue(chave, out avisada) && Math.Abs((avisada - j.ResetaEm.Value).TotalMinutes) < 60) return;
+            ritmoAvisado[chave] = j.ResetaEm.Value;
+            bool estimado = j.Estimado.HasValue && j.Estimado.Value > j.Usado + 0.004;
+            mostrar(new Aviso
+            {
+                Provedor = p.Id,
+                Titulo = p.Nome + " em ritmo alto",
+                Subtitulo = j.Rotulo + " · " + Texto.Pct(atual, estimado) + " usado",
+                Status = "No ritmo atual, acaba às " + esgota.ToLocalTime().ToString("HH:mm"),
+                CorStatus = pal.Atencao,
+                Proxima = Tempo.Duracao(sobra) + " antes de renovar · +" + Math.Max(1, (int)Math.Round(p.RitmoHora.Value * 100)) + " pts/h",
+                Som = Som.Limite,
+            });
         }
 
         void Sessoes(Provedor p, Config cfg, Paleta pal)

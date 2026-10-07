@@ -32,6 +32,17 @@ namespace Pulso
                 Mensagens.Enviar(3, System.IO.Path.GetFullPath(args[1]));
                 return;
             }
+            // Instalação (instalar.cmd / atualizar.cmd / desinstalar.cmd)
+            if (args.Length > 0 && args[0] == "--sair")
+            {
+                Instalacao.FecharAberto();
+                return;
+            }
+            if (args.Length > 0 && (args[0] == "--registrar" || args[0] == "--desinstalar"))
+            {
+                Application.EnableVisualStyles();
+                Environment.Exit(args[0] == "--registrar" ? Instalacao.Registrar(args.Length > 1 ? args[1] : null) : Instalacao.Desinstalar());
+            }
 
             bool novo;
             using (var unica = new Mutex(true, @"Local\Pulso", out novo))
@@ -64,6 +75,7 @@ namespace Pulso
         readonly Mensagens mensagens;
         readonly ClaudeFonte claude = new ClaudeFonte();
         readonly CodexFonte codex = new CodexFonte();
+        readonly CodexProjetos codexProjetos = new CodexProjetos();
         readonly Dictionary<string, FonteExtra> extras = new Dictionary<string, FonteExtra>();
         readonly Avisos avisos;
         public readonly CartaoAviso Cartao;
@@ -82,6 +94,7 @@ namespace Pulso
                 if (tipo == 1) AbrirConfig();
                 else if (tipo == 2) claude.DaBarraDeStatus(Json.Parse(texto));
                 else if (tipo == 4) Cartao.Mostrar(Avisos.Exemplo());
+                else if (tipo == 6) Sair(); // instalar/atualizar/desinstalar precisam do Pulso fechado
                 else if (tipo == 5)
                     // Diagnóstico: grava a próxima combinação como nas Configurações e registra no log
                     Atalhos.Gravar((m, k) => Log.Info("teste de atalho: " + Atalhos.Texto(m, (int)k) + (TrocarAtalho(m, (int)k) ? " registrado" : " recusado (em uso)")),
@@ -124,7 +137,9 @@ namespace Pulso
             }
             claude.Iniciar();
             codex.Iniciar();
+            codexProjetos.Iniciar();
             foreach (var f in Extras.Criar()) { extras[f.Key] = f.Value; f.Value.Iniciar(); }
+            Atualizacao.Iniciar(SynchronizationContext.Current);
         }
 
         // Diagnóstico: o que o Pulso está mostrando agora, em JSON (para conferir contra a fonte)
@@ -234,6 +249,7 @@ namespace Pulso
                 Cartao.Dispose();
                 claude.Dispose();
                 codex.Dispose();
+                codexProjetos.Dispose();
                 foreach (var f in extras.Values) f.Dispose();
                 bandeja.Dispose();
                 Notch.Dispose();

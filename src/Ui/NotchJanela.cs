@@ -836,6 +836,42 @@ namespace Pulso
             if (frescor != null) { y += 8 * s; y += Paragrafo(med, g, frescor, fPeq, pal.TintaFraca, x, y, w); }
             if (p.Nota != null && p.Janelas.Count > 0) { y += 4 * s; y += Paragrafo(med, g, p.Nota, fPeq, pal.Tinta3, x, y, w); }
 
+            // De onde veio o uso da sessão de 5h (só o deste computador)
+            var indice = Projetos.De(p.Id);
+            if (indice != null && Config.Atual.ProjetosNoCartao)
+            {
+                var js = p.Janelas.FirstOrDefault(v => v.Minutos == 300 && !v.Semanal);
+                var parcelas = indice.Parcelas(js != null && js.ResetaEm.HasValue ? js.ResetaEm.Value.AddMinutes(-300) : DateTime.UtcNow.AddHours(-5));
+                if (parcelas.Count > 4)
+                    parcelas = parcelas.Take(3).Concat(new[] { new KeyValuePair<string, double>("Outros", parcelas.Skip(3).Sum(kv => kv.Value)) }).ToList();
+                if (parcelas.Count > 0)
+                {
+                    y += 12 * s;
+                    if (g != null) using (var pen = new Pen(pal.CartaoRegra, 1 * s)) g.DrawLine(pen, x, y, x + w, y);
+                    y += 8 * s;
+                    if (g != null) Escrever(g, "Por projeto nesta sessão", fRotulo, pal.Tinta2, x, y, w, 16 * s, StringAlignment.Near);
+                    y += 16 * s + 2 * s;
+                    foreach (var kv in parcelas)
+                    {
+                        float hlin = 16 * s;
+                        if (g != null)
+                        {
+                            string pct = kv.Value < 0.005 ? "<1%" : Math.Round(kv.Value * 100) + "%";
+                            float wp = TextoGdi.Medir("100%", fPeq).Width + 2 * s;
+                            Escrever(g, kv.Key, fPeq, pal.Tinta4, x, y, w - wp - 8 * s, hlin, StringAlignment.Near);
+                            Escrever(g, pct, fPeq, pal.TintaFraca, x + w - wp, y, wp, hlin, StringAlignment.Far);
+                            float hb = 3 * s, yb = y + hlin + 1 * s;
+                            using (var b = new SolidBrush(pal.Barra))
+                            using (var trilho = Arredondado(new RectangleF(x, yb, w, hb), 1.5f * s)) g.FillPath(b, trilho);
+                            using (var b = new SolidBrush(pal.Tinta3))
+                            using (var cheio = Arredondado(new RectangleF(x, yb, (float)Math.Max(hb, w * kv.Value), hb), 1.5f * s)) g.FillPath(b, cheio);
+                        }
+                        y += hlin + 1 * s + 3 * s + 5 * s;
+                    }
+                    y -= 5 * s;
+                }
+            }
+
             // Sessões
             var sessoes = p.Sessoes.Values.Where(v => v.Estado != Atividade.Ociosa)
                 .OrderBy(v => v.Estado == Atividade.Aguardando ? 0 : v.Estado == Atividade.Trabalhando ? 1 : 2)

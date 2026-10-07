@@ -37,6 +37,8 @@ namespace Pulso
         public bool Estimativa = true;      // move o medidor do Claude entre leituras exatas
         public bool AvisoSessaoFim = true;     // cartão quando uma sessão termina o turno
         public bool AvisoSessaoEspera = true;  // cartão quando uma sessão para esperando você
+        public bool AvisoRitmo = true;         // cartão quando, no ritmo atual, a sessão de 5h acaba antes de renovar
+        public bool ProjetosNoCartao = true;   // cartão mostra quanto da sessão de 5h veio de cada projeto
         public bool SomAvisos = true;
         public bool RitmoDiario;               // anel do Claude mostra o ritmo do dia (cota semanal ÷ 7)
         public bool AnelTracejado;             // anel semanal tracejado
@@ -90,6 +92,8 @@ namespace Pulso
                     c.Estimativa = Json.Bool(o, "estimativa") ?? c.Estimativa;
                     c.AvisoSessaoFim = Json.Bool(o, "avisoSessaoFim") ?? c.AvisoSessaoFim;
                     c.AvisoSessaoEspera = Json.Bool(o, "avisoSessaoEspera") ?? c.AvisoSessaoEspera;
+                    c.AvisoRitmo = Json.Bool(o, "avisoRitmo") ?? c.AvisoRitmo;
+                    c.ProjetosNoCartao = Json.Bool(o, "projetosNoCartao") ?? c.ProjetosNoCartao;
                     c.SomAvisos = Json.Bool(o, "somAvisos") ?? c.SomAvisos;
                     c.RitmoDiario = Json.Bool(o, "ritmoDiario") ?? c.RitmoDiario;
                     c.AnelTracejado = Json.Bool(o, "anelTracejado") ?? c.AnelTracejado;
@@ -134,6 +138,8 @@ namespace Pulso
                     { "estimativa", Estimativa },
                     { "avisoSessaoFim", AvisoSessaoFim },
                     { "avisoSessaoEspera", AvisoSessaoEspera },
+                    { "avisoRitmo", AvisoRitmo },
+                    { "projetosNoCartao", ProjetosNoCartao },
                     { "somAvisos", SomAvisos },
                     { "ritmoDiario", RitmoDiario },
                     { "anelTracejado", AnelTracejado },

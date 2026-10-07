@@ -11,7 +11,7 @@ namespace Pulso
     // Integrações que mexem fora da pasta do Pulso. Todas são ligadas por ação da pessoa nas Configurações.
     static class Integracao
     {
-        static string Exe { get { return Application.ExecutablePath; } }
+        static string Exe { get { return Instalacao.ExeOficial; } }
         static string Comando { get { return "\"" + Exe.Replace("\\", "/") + "\" --statusline"; } }
 
         // ---- Barra de status do Claude Code (terminal) ----
@@ -84,6 +84,8 @@ namespace Pulso
         // ---- Iniciar com o Windows ----
         const string Run = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
+        // Só grava quando falta ou aponta para outro lugar: regravar a cada abertura é o que o antivírus
+        // reconhece como vírus se fixando no sistema
         public static void IniciarComWindows(bool ligar)
         {
             try
@@ -91,7 +93,8 @@ namespace Pulso
                 using (var k = Registry.CurrentUser.OpenSubKey(Run, true))
                 {
                     if (k == null) return;
-                    if (ligar) k.SetValue("Pulso", "\"" + Exe + "\"");
+                    string valor = "\"" + Exe + "\"";
+                    if (ligar) { if (!string.Equals(k.GetValue("Pulso") as string, valor, StringComparison.OrdinalIgnoreCase)) k.SetValue("Pulso", valor); }
                     else if (k.GetValue("Pulso") != null) k.DeleteValue("Pulso");
                 }
             }

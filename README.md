@@ -27,7 +27,7 @@
 <p>
   <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10_|_11-0078D4?style=for-the-badge" />
   <img alt=".NET Framework 4.8" src="https://img.shields.io/badge/.NET_Framework-4.8-512BD4?style=for-the-badge" />
-  <img alt="Versão 1.0" src="https://img.shields.io/badge/Vers%C3%A3o-1.0-00c46a?style=for-the-badge" />
+  <img alt="Versão 1.1" src="https://img.shields.io/badge/Vers%C3%A3o-1.1-00c46a?style=for-the-badge" />
 </p>
 
 <br/>
@@ -57,10 +57,13 @@
 - [Privacidade e segurança](#privacidade-e-segurança)
 - [Leveza](#leveza)
 - [Estrutura do projeto](#estrutura-do-projeto)
-- [Instalação em qualquer computador](#instalação-em-qualquer-computador)
+- [Instalação](#instalação)
+  - [O que a instalação cria](#o-que-a-instalação-cria)
+- [Atualização](#atualização)
+- [Desinstalação](#desinstalação)
 - [Como usar](#como-usar)
 - [Configurações](#configurações)
-- [Atualizando para uma versão nova](#atualizando-para-uma-versão-nova)
+- [Desenvolvimento](#desenvolvimento)
 - [Diagnóstico e linha de comando](#diagnóstico-e-linha-de-comando)
 - [Autor](#autor)
 
@@ -70,9 +73,12 @@
 |---|---|
 | **Anéis ao vivo** | Um anel por provedor, encostado na borda da tela, com o percentual do limite principal. A cor passa de verde para amarelo e vermelho nos limites que você escolher. Um `~` antes do número indica que ele já inclui a estimativa local |
 | **Cartão ao passar o cursor** | Cada janela de limite com barra, percentual usado, horário de renovação, folga ou excesso em relação ao ritmo (com uma marca na barra), velocidade em pontos por hora, projeção de esgotar antes de renovar, de onde veio a leitura e há quanto tempo |
+| **Consumo por projeto** | O cartão do Claude e do Codex mostra quanto da sessão de 5 horas veio de cada pasta de projeto (opcional) |
 | **Sessões ativas** | O cartão lista as sessões trabalhando ou esperando você; clicar numa delas traz a janela daquela sessão para a frente |
 | **Indicador de atividade** | Dentro do anel: arco girando enquanto o agente trabalha, círculo pulsando quando ele para e espera a sua resposta |
 | **Avisos** | Cartão ao lado do anel, com som do Windows, quando um limite renova, quando chega a 80%, 95% e 100%, quando uma sessão termina e quando ela fica esperando você. Clicar no aviso leva à janela da sessão |
+| **Aviso de ritmo** | Antes de chegar aos 80%: se no ritmo dos últimos 30 minutos a sessão de 5 horas vai acabar antes de renovar, o Pulso avisa a hora em que ela acaba e quanto tempo antes da renovação (opcional) |
+| **Instala como um app** | Fica em Programas, no Menu Iniciar e em Configurações › Aplicativos do Windows, com Desinstalar; atualiza pelo próprio app |
 | **Três modos de exibição** | Sempre aberto; recolhido numa cápsula pequena que abre ao passar o cursor (com a opção de a cápsula mudar de cor conforme o fundo); ou oculto, só com o ícone na bandeja |
 | **Qualquer borda, qualquer monitor** | Direita, esquerda, superior ou inferior, em qualquer tela. Arrastável pelos pontinhos, pela engrenagem ou com Alt, ou fixo no meio da borda |
 | **Some em tela cheia** | Jogo, vídeo ou apresentação em tela cheia escondem o notch sozinhos |
@@ -168,7 +174,8 @@ O Pulso não usa nenhum pacote externo: tudo vem do próprio Windows e do .NET F
 |---|---|
 | **Credenciais** | Lê só os logins que cada ferramenta já mantém no seu usuário, em memória e na hora da consulta. Nada é gravado, copiado ou enviado para outro lugar além do servidor oficial de cada uma |
 | **Token vencido** | Um token do Claude vencido nunca é enviado; o Pulso espera o Claude Code renová-lo |
-| **O que fica salvo** | Apenas `%APPDATA%\Pulso`: `config.json` (suas escolhas), `estado.json` (últimas leituras e calibração, só números e datas), `custos.json` (índice de custo por minuto) e `pulso.log` (rotativo, até 512 KB). Nenhuma credencial |
+| **O que fica salvo** | Apenas `%APPDATA%\Pulso`: `config.json` (suas escolhas), `estado.json` (últimas leituras e calibração, só números e datas), `custos.json` (custo por minuto e por projeto do Claude), `codex-projetos.json` (uso por minuto e por projeto do Codex) e `pulso.log` (rotativo, até 512 KB). Nenhuma credencial |
+| **Atualização** | A procura usa o próprio Git do computador e o login que ele já tem; o Pulso não guarda senha nem token do GitHub |
 | **Sem hooks** | A atividade das sessões vem dos arquivos que o Claude Code já grava; nada é instalado no `settings.json` |
 | **Barra de status (opcional)** | Ligada só pelo botão nas Configurações: grava uma linha no `~/.claude/settings.json`, com backup, e desligar remove a linha |
 | **Cápsula adaptável** | Lê o brilho médio de uma faixa fina da tela ao lado da cápsula; nada da imagem é guardado |
@@ -181,7 +188,7 @@ Medido com o Pulso aberto, o Claude trabalhando e o indicador de atividade anima
 |---|---|
 | Memória em uso | ~68 MB (44 MB próprios) |
 | CPU | ~0,2% |
-| Programa no disco | 275 KB |
+| Programa no disco | 296 KB |
 | Dados salvos | ~0,1 MB |
 
 O notch só redesenha quando algo muda: 60 quadros por segundo durante a animação de abrir, 10 por segundo com um agente trabalhando e nenhum quando está tudo parado.
@@ -197,7 +204,10 @@ Pulso/
 │   │   ├── Model.cs             # Provedor, janela de limite, sessão e o estado compartilhado
 │   │   ├── Catalogo.cs          # Os 8 provedores e a página de uso de cada um
 │   │   ├── Ritmo.cs             # Folga/excesso em relação ao ritmo e velocidade em pontos por hora
-│   │   ├── Avisos.cs            # Quando mostrar cada aviso (renovação, 80/95/100%, sessões)
+│   │   ├── Avisos.cs            # Quando mostrar cada aviso (renovação, 80/95/100%, ritmo, sessões)
+│   │   ├── Projetos.cs          # Uso por minuto e por pasta de projeto (cartão "Por projeto nesta sessão")
+│   │   ├── Instalacao.cs        # Instalar, registrar em Aplicativos, atalho, desinstalar e a versão
+│   │   ├── Atualizacao.cs       # Procura de versão nova no GitHub e o atualizar.cmd
 │   │   ├── Atalhos.cs           # Atalho global e a gravação de uma combinação nova
 │   │   ├── Seguidor.cs          # Acompanha arquivos .jsonl que crescem e entrega cada linha nova
 │   │   ├── EstadoSalvo.cs       # Últimas leituras e calibração (estado.json)
@@ -213,6 +223,7 @@ Pulso/
 │   │   ├── ClaudeRegistro.cs    # Sessões trabalhando, esperando ou paradas
 │   │   ├── CodexFonte.cs        # Leitura do Codex e a reserva pelo servidor
 │   │   ├── CodexSessoes.cs      # Arquivos de sessão do Codex
+│   │   ├── CodexProjetos.cs     # Tokens de cada resposta do Codex por pasta de projeto
 │   │   ├── FonteExtra.cs        # Base dos outros provedores (detecção e consulta)
 │   │   ├── Extras.cs            # Cria o leitor de cada provedor extra
 │   │   ├── OutrosProvedores.cs  # Copilot, Grok, Cursor, z.ai e OpenCode
@@ -234,12 +245,14 @@ Pulso/
 ├── tools/gerar-icone.ps1        # Gera o pulso.ico
 ├── docs/imagens/                # Imagens deste README
 ├── app.manifest                 # DPI por monitor e controles visuais do Windows
-└── build.cmd                    # Compila o bin\Pulso.exe
+├── build.cmd                    # Compila o bin\Pulso.exe (e grava o commit da compilação)
+├── instalar.cmd                 # Compila e instala (ou reinstala por cima)
+└── atualizar.cmd                # Baixa a versão nova do GitHub e reinstala
 ```
 
-## Instalação em qualquer computador
+## Instalação
 
-O Pulso roda em qualquer computador com **Windows 10 ou 11**. Ele não guarda nada da máquina em que foi criado: os caminhos são montados a partir do usuário logado, e cada computador mantém as próprias configurações em `%APPDATA%\Pulso`.
+O Pulso roda em qualquer computador com **Windows 10 ou 11** e se instala como um app comum, só para o seu usuário, sem permissão de administrador. Ele não guarda nada da máquina em que foi criado: cada computador mantém as próprias configurações em `%APPDATA%\Pulso`.
 
 ### Pré-requisitos
 
@@ -247,30 +260,58 @@ O Pulso roda em qualquer computador com **Windows 10 ou 11**. Ele não guarda na
 |---|---:|---|---|---|
 | **Windows** | `10 (1903+)` ou `11` | Sim | — | Usa recursos do próprio Windows (janela transparente, bandeja, atalho global) |
 | **.NET Framework** | `4.8` | Sim | [Baixar .NET Framework 4.8](https://dotnet.microsoft.com/pt-br/download/dotnet-framework/net48) | Já vem no Windows 10 1903+ e no 11. Traz o compilador `csc.exe` que o `build.cmd` usa; não precisa de Visual Studio nem do SDK do .NET |
+| **Git** | Atual | Sim | [Baixar Git](https://git-scm.com/downloads) | Para baixar o projeto e receber as atualizações |
 | **Claude Code** e/ou **Codex** | Atual | Para ter leituras | [Claude Code](https://claude.com/claude-code) · [Codex](https://developers.openai.com/codex) | Instalados e logados nesse computador: o Pulso lê o que eles gravam |
-| **Git** | Atual | Opcional | [Baixar Git](https://git-scm.com/downloads) | Só para clonar pelo terminal; o ZIP baixado do GitHub também serve |
-
-Não precisa de permissão de administrador.
 
 ### Passo a passo
 
 ```bat
-:: Clonar o repositório (é privado: entre na sua conta do GitHub quando o Git pedir)
+:: Baixar o projeto (é privado: entre na sua conta do GitHub quando o Git pedir)
 git clone https://github.com/LucasDias777/Pulso.git
 
-:: Acessar a pasta
-cd Pulso
-
-:: Compilar (gera bin\Pulso.exe em poucos segundos)
-build.cmd
-
-:: Abrir
-bin\Pulso.exe
+:: Instalar: compila, instala e já abre o Pulso
+Pulso\instalar.cmd
 ```
 
-No PowerShell, use `.\build.cmd` e `.\bin\Pulso.exe`. Também dá para dar dois cliques no `build.cmd` e depois no `bin\Pulso.exe`.
+Também dá para dar dois cliques no `instalar.cmd` dentro da pasta baixada.
 
-Na primeira vez o Pulso já se registra para abrir junto com o Windows, apontando para o `Pulso.exe` da pasta em que ele foi compilado. Se mudar a pasta de lugar, desligue e ligue de novo **Abrir o Pulso ao entrar no Windows** em Configurações › Geral.
+> **Computador com outra conta do GitHub** (como o da empresa): clone com o usuário no endereço, `https://LucasDias777@github.com/LucasDias777/Pulso.git`. Assim o Git guarda o login pessoal separado e não confunde com a outra conta.
+
+> **Mantenha a pasta clonada**: é dela que saem as atualizações. O Pulso instalado fica em outra pasta.
+
+### O que a instalação cria
+
+| Onde | O quê |
+|---|---|
+| `%LOCALAPPDATA%\Programs\Pulso` | O `Pulso.exe` e o `desinstalar.cmd` |
+| Menu Iniciar | Atalho **Pulso** |
+| Configurações › Aplicativos do Windows | Entrada **Pulso**, com versão, autor e **Desinstalar** |
+| Início com o Windows | Registro do seu usuário apontando para o Pulso instalado (desligável em Configurações › Geral) |
+| `%APPDATA%\Pulso` | Configurações e dados, criados conforme o uso |
+
+Rodar o `instalar.cmd` de novo reinstala por cima, mantendo as configurações.
+
+## Atualização
+
+O Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas, comparando a versão instalada com a do GitHub. Quando há uma nova, aparecem:
+
+- em **Configurações › Geral › Atualizações**, o botão **Atualizar agora** (e **Procurar atualização**, para conferir na hora);
+- na bandeja e no botão direito do notch, **Atualizar o Pulso (versão nova)**.
+
+Atualizar abre uma janela que baixa a versão nova, compila, fecha o Pulso e abre o novo em alguns segundos; as configurações ficam. O mesmo pode ser feito com dois cliques no `atualizar.cmd` da pasta clonada.
+
+Na primeira vez em cada computador, clique em **Procurar atualização**: se o Git ainda não tiver o login do GitHub dessa conta, ele abre a janela de login uma vez e guarda. A procura automática nunca abre janela.
+
+## Desinstalação
+
+Por **Configurações › Aplicativos › Aplicativos instalados › Pulso › Desinstalar**, como qualquer app, ou pelo botão **Desinstalar…** em Configurações › Geral do Pulso. O desinstalador:
+
+1. pede confirmação;
+2. fecha o Pulso e remove o início com o Windows, o atalho do Menu Iniciar, a entrada em Aplicativos e a barra de status do Claude Code (se estava ligada);
+3. pergunta se apaga também as configurações e o histórico (`%APPDATA%\Pulso`). Responda **Não** para mantê-los e reinstalar depois com tudo igual;
+4. apaga a pasta do programa.
+
+A pasta clonada do projeto não é tocada; apague-a à mão se não for reinstalar.
 
 ## Como usar
 
@@ -283,7 +324,7 @@ Na primeira vez o Pulso já se registra para abrir junto com o Windows, apontand
 | Arrastar os pontinhos ou a engrenagem, ou segurar Alt e arrastar o notch | Leva o notch para outra posição, borda ou monitor (com **Arrastável** ligado) |
 | Botão direito no notch | Atualizar, abrir a página de uso, manter aberto, mudar de borda, ocultar, Configurações e sair |
 | `Win + Y` | Mostra e oculta o notch |
-| Abrir o `Pulso.exe` de novo | Abre as Configurações do Pulso que já está rodando |
+| Abrir o Pulso pelo Menu Iniciar com ele já aberto | Abre as Configurações |
 
 ## Configurações
 
@@ -303,18 +344,19 @@ Na primeira vez o Pulso já se registra para abrir junto com o Windows, apontand
 | Aba | O que dá para ajustar |
 |---|---|
 | **Contas** | Quais provedores têm anel (um provedor ativado entra no fim da cápsula), a estimativa ao vivo do Claude e a barra de status do Claude Code. Mostra o plano e a origem da última leitura de cada um |
-| **Aparência** | Exibição (sempre, ao passar o cursor ou oculto), cápsula adaptável, tamanho, tema, anel semanal (dentro, fora ou tracejado), ritmo do dia no Claude, borda, monitor, arrastável e os limites de cor (atenção e crítico, em degrau ou rampa) |
-| **Geral** | Abrir com o Windows, atalho global e gravação de uma combinação nova, cada tipo de aviso, som, pré-visualização do cartão de aviso e a pasta de dados |
+| **Aparência** | Exibição (sempre, ao passar o cursor ou oculto), cápsula adaptável, tamanho, tema, anel semanal (dentro, fora ou tracejado), ritmo do dia no Claude, consumo por projeto no cartão, borda, monitor, arrastável e os limites de cor (atenção e crítico, em degrau ou rampa) |
+| **Geral** | Abrir com o Windows, atalho global e gravação de uma combinação nova, cada tipo de aviso (inclusive o de ritmo), som, pré-visualização do cartão de aviso, atualizações, pasta de dados e desinstalar |
 
-## Atualizando para uma versão nova
+## Desenvolvimento
 
-Feche o Pulso antes de compilar (**Encerrar o Pulso** nas Configurações ou **Sair do Pulso** na bandeja); com ele aberto o Windows não deixa trocar o `Pulso.exe`.
+Para testar uma mudança sem instalar, feche antes o Pulso instalado (**Encerrar o Pulso** nas Configurações ou **Sair do Pulso** na bandeja; só um Pulso roda por vez) e rode da pasta do projeto:
 
 ```bat
-git pull
 build.cmd
 bin\Pulso.exe
 ```
+
+Para levar a mudança para a versão instalada, rode o `instalar.cmd`. O `build.cmd` grava o commit atual na compilação, e é por ele que a procura de atualização compara a versão instalada com o GitHub.
 
 ## Diagnóstico e linha de comando
 
@@ -325,6 +367,9 @@ bin\Pulso.exe
 | `Pulso.exe --previa` | Mostra um cartão de aviso de exemplo |
 | `Pulso.exe --gravar-teste` | Testa a gravação de um atalho novo e registra o resultado no log |
 | `Pulso.exe --statusline` | Usado pela barra de status do Claude Code, quando ligada nas Configurações |
+| `Pulso.exe --sair` | Fecha o Pulso aberto e espera ele terminar (usado pelo `instalar.cmd`) |
+| `Pulso.exe --registrar <pasta do projeto>` | Cria o atalho, a entrada em Aplicativos e o início com o Windows (usado pelo `instalar.cmd`) |
+| `Pulso.exe --desinstalar` | Remove tudo o que a instalação criou (usado pelo `desinstalar.cmd`) |
 
 O log fica em `%APPDATA%\Pulso\pulso.log`, aberto pelo botão **Abrir pasta** em Configurações › Geral.
 

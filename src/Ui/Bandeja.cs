@@ -138,6 +138,8 @@ namespace Pulso
                 m.Items.Add(mover);
                 m.Items.Add(new ToolStripMenuItem("Ocultar o notch", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
             }
+            if (Atualizacao.Estado == Atualizacao.Situacao.Disponivel)
+                m.Items.Add(new ToolStripMenuItem("Atualizar o Pulso (versão nova)", null, delegate { Atualizacao.Aplicar(); }));
             m.Items.Add(new ToolStripMenuItem("Configurações…", null, delegate { app.AbrirConfig(); }));
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add(new ToolStripMenuItem("Sair do Pulso", null, delegate { app.Sair(); }));

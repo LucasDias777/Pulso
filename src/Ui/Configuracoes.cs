@@ -139,9 +139,12 @@ namespace Pulso
             FormClosed += delegate { relogio.Dispose(); if (Atalhos.Gravando) Atalhos.Cancelar(); };
             Estado.Mudou += AoMudarEstado;
             FormClosed += delegate { Estado.Mudou -= AoMudarEstado; };
+            Atualizacao.Mudou += AoMudarAtualizacao;
+            FormClosed += delegate { Atualizacao.Mudou -= AoMudarAtualizacao; };
         }
 
         void AoMudarEstado() { if (aba == 0 && !IsDisposed) Invalidate(); }
+        void AoMudarAtualizacao() { if (aba == 2 && !IsDisposed) Invalidate(); }
 
         protected override CreateParams CreateParams
         {
@@ -824,6 +827,8 @@ namespace Pulso
                 cfg.AnelSemanal != AnelSemanal.Desligado ? I("Anel semanal tracejado", NovaChave("tracejado", cfg.AnelTracejado, v => cfg.AnelTracejado = v)) : null,
                 I("Ritmo do dia no Claude", NovaChave("ritmodia", cfg.RitmoDiario, v => cfg.RitmoDiario = v)),
                 L("O anel do Claude passa a mostrar o uso da semana contra a parte liberada até hoje: 1/7 da cota por dia, contado a partir da abertura da semana. Gastando no ritmo, o anel só chega a 100% no fim de cada dia. A sessão de 5 horas continua no cartão."),
+                I("Consumo por projeto no cartão", NovaChave("projetos", cfg.ProjetosNoCartao, v => cfg.ProjetosNoCartao = v)),
+                L("O cartão do Claude e do Codex mostra quanto da sessão de 5 horas veio de cada pasta de projeto. Conta só o uso deste computador."),
                 I("Borda", NovoSeg("borda", new[] { "Esquerda", "Direita", "Superior", "Inferior" }, Array.IndexOf(bordas, cfg.Borda), i => cfg.Borda = bordas[i])),
             };
             var telas = Screen.AllScreens;
@@ -888,23 +893,58 @@ namespace Pulso
                     I("", new Botoes { Itens = BotoesAtalho(cfg) }),
                     L(gravandoAtalho ? "Pressione a combinação: Ctrl, Alt, Shift ou Win com outra tecla, ou uma tecla de F1 a F24. Esc cancela."
                         : avisoAtalho ?? (!cfg.Atalho ? "Desativado." : app.AtalhoAtivo ? "Mostra e oculta o notch de qualquer lugar."
-                        : cfg.AtalhoTexto + " está em uso por outro programa — grave outra combinação.")),
-                    I("Versão", new Valor { Texto = "1.0" })),
+                        : cfg.AtalhoTexto + " está em uso por outro programa — grave outra combinação."))),
                 B("Notificações",
                     I("Avisos de renovação", NovaChave("renovacao", cfg.AvisoRenovacao, v => cfg.AvisoRenovacao = v)),
                     L("Mostra um cartão ao lado do notch quando o Claude ou o Codex renova uma janela depois de pelo menos 10% de uso. O cartão aparece mesmo com o notch oculto."),
                     I("Aviso de limite", NovaChave("limite", cfg.AvisoLimite, v => cfg.AvisoLimite = v)),
                     L("Avisa quando uma janela chega a 80%, a 95% e ao limite, uma vez por janela — sempre pelo valor exato, nunca pela estimativa."),
+                    I("Aviso de ritmo", NovaChave("ritmo", cfg.AvisoRitmo, v => cfg.AvisoRitmo = v)),
+                    L("Avisa quando, no ritmo dos últimos 30 minutos, a sessão de 5 horas vai acabar antes de renovar — com tempo de desacelerar antes dos avisos de 80% e 95%. Uma vez por sessão."),
                     I("Sessão terminou", NovaChave("fim", cfg.AvisoSessaoFim, v => cfg.AvisoSessaoFim = v)),
                     L("Avisa quando o Claude ou o Codex termina uma resposta que levou pelo menos 10 segundos — a não ser que você já esteja na janela dela. Clicar no cartão leva até a janela."),
                     I("Sessão esperando você", NovaChave("espera", cfg.AvisoSessaoEspera, v => cfg.AvisoSessaoEspera = v)),
                     L("Avisa quando uma sessão para e pede a sua resposta (permissão, pergunta)."),
                     I("Som dos avisos", NovaChave("som", cfg.SomAvisos, v => cfg.SomAvisos = v)),
                     I("Pré-visualizar o cartão", NovoBotao("previa", "Pré-visualizar", delegate { app.Cartao.Mostrar(Avisos.Exemplo()); }))),
+                B("Atualizações", LinhasAtualizacao().ToArray()),
                 B(null,
                     I("Pasta de dados", NovoBotao("pasta", "Abrir pasta", delegate { try { Process.Start(new ProcessStartInfo(Caminhos.Dados) { UseShellExecute = true }); } catch { } })),
-                    L("Tudo o que o Pulso guarda fica numa pasta: configurações, estado, índice de custo e log. Nenhuma credencial.")),
+                    L("Tudo o que o Pulso guarda fica numa pasta: configurações, estado, índice de custo e log. Nenhuma credencial."),
+                    Instalacao.Instalado ? I("Desinstalar o Pulso", NovoBotao("desinstalar", "Desinstalar…", Instalacao.AbrirDesinstalador)) : null,
+                    Instalacao.Instalado ? L("Também dá para desinstalar em Configurações › Aplicativos do Windows. Você escolhe se as suas configurações ficam.") : null),
             };
+        }
+
+        List<Linha> LinhasAtualizacao()
+        {
+            var l = new List<Linha>();
+            l.Add(I("Versão", new Valor { Texto = Instalacao.Versao + (string.IsNullOrEmpty(Atualizacao.Commit) ? "" : " · " + Atualizacao.Commit) }));
+            if (Instalacao.Origem == null)
+            {
+                l.Add(L("Para receber atualizações por aqui, instale o Pulso pelo instalar.cmd da pasta do projeto clonada do GitHub."));
+                return l;
+            }
+            var st = Atualizacao.Estado;
+            var botoes = new List<Botao>();
+            if (st == Atualizacao.Situacao.Disponivel) botoes.Add(NovoBotao("atualizar", "Atualizar agora", Atualizacao.Aplicar));
+            botoes.Add(new Botao
+            {
+                Id = "procurar", Texto = st == Atualizacao.Situacao.Procurando ? "Procurando…" : "Procurar atualização",
+                Desativado = st == Atualizacao.Situacao.Procurando, Clique = delegate { Atualizacao.Procurar(true); },
+            });
+            l.Add(I("", new Botoes { Itens = botoes }));
+            string texto;
+            switch (st)
+            {
+                case Atualizacao.Situacao.Disponivel: texto = "Versão nova no GitHub (" + Atualizacao.Detalhe + "). Atualizar agora baixa, compila e reabre o Pulso em alguns segundos."; break;
+                case Atualizacao.Situacao.EmDia: texto = "Você está com a versão mais recente."; break;
+                case Atualizacao.Situacao.Erro: texto = Atualizacao.Detalhe; break;
+                case Atualizacao.Situacao.Procurando: texto = "Consultando o GitHub…"; break;
+                default: texto = "O Pulso procura sozinho 2 minutos depois de abrir e a cada 12 horas, sem interromper você."; break;
+            }
+            l.Add(L(texto));
+            return l;
         }
 
         // ---------- interação ----------

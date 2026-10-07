@@ -1,5 +1,6 @@
 # Saída do build (gerada pelo build.cmd em cada computador)
 bin/
+src/Compilacao.cs
 
 # Código de referência de terceiros, mantido só localmente
 referencia/

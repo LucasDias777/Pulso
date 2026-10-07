@@ -16,6 +16,7 @@ namespace Pulso
     class ClaudeSessoes : IDisposable
     {
         static readonly TimeSpan Guardar = TimeSpan.FromDays(8);
+        const int Versao = 2;                   // 2: com o custo por projeto
         Seguidor seguidor;
         Timer salvar;
         readonly object trava = new object();
@@ -76,7 +77,7 @@ namespace Pulso
             {
                 var msg = Json.Obj(o, "message");
                 var uso = Json.Obj(msg, "usage");
-                if (uso != null) Somar(Json.Str(msg, "id") + "|" + Json.Str(o, "requestId"), Json.Str(msg, "model"), uso, quando, recente);
+                if (uso != null) Somar(Json.Str(msg, "id") + "|" + Json.Str(o, "requestId"), Json.Str(msg, "model"), uso, quando, recente, cwd);
                 string parada = Json.Str(msg, "stop_reason");
                 if (!recente || lateral) return;
                 if (AtividadePeloArquivo) Marcar(sessao, cwd, parada == "end_turn" ? Atividade.Concluida : Atividade.Trabalhando);
@@ -89,7 +90,7 @@ namespace Pulso
             else if (recente && !lateral) Marcar(sessao, cwd, Atividade.Trabalhando);
         }
 
-        void Somar(string chave, string modelo, IDictionary<string, object> uso, DateTime quando, bool recente)
+        void Somar(string chave, string modelo, IDictionary<string, object> uso, DateTime quando, bool recente, string pasta)
         {
             double custo = Custo(modelo, uso);
             if (custo <= 0 || quando < DateTime.UtcNow - Guardar) return;
@@ -113,6 +114,7 @@ namespace Pulso
                 porMinuto.TryGetValue(min, out v);
                 porMinuto[min] = v + delta;
                 mudouDesdeSalvar = true;
+                Projetos.Claude.Somar(quando, pasta, delta);
             }
             if (recente)
             {
@@ -144,6 +146,9 @@ namespace Pulso
             {
                 if (!File.Exists(Arquivo)) return;
                 var o = Json.Parse(File.ReadAllText(Arquivo));
+                // Índice de antes do consumo por projeto: refaz do zero (lê de novo os últimos 8 dias, uma vez)
+                if ((Json.Num(o, "versao") ?? 1) < Versao) { Log.Info("claude: refazendo o índice de custo com os projetos"); return; }
+                Projetos.Claude.DeJson(Json.Obj(o, "porProjeto"), DateTime.UtcNow - Guardar);
                 long corte = Tempo.UnixMs(DateTime.UtcNow - Guardar) / 60000;
                 var m = Json.Obj(o, "porMinuto");
                 if (m != null)
@@ -178,7 +183,10 @@ namespace Pulso
                 }
                 var p = new Dictionary<string, object>();
                 foreach (var kv in seguidor.Posicoes()) if (File.Exists(kv.Key)) p[kv.Key] = kv.Value;
-                Caminhos.GravarAtomico(Arquivo, Json.Write(new Dictionary<string, object> { { "porMinuto", m }, { "posicoes", p } }));
+                Caminhos.GravarAtomico(Arquivo, Json.Write(new Dictionary<string, object>
+                {
+                    { "versao", Versao }, { "porMinuto", m }, { "porProjeto", Projetos.Claude.ParaJson(DateTime.UtcNow - Guardar) }, { "posicoes", p },
+                }));
             }
             catch (Exception e) { Log.Erro("salvar índice de custo", e); }
         }
