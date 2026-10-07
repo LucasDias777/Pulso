@@ -763,9 +763,9 @@ namespace Pulso
                     };
                     conta.Subs.Add(new KeyValuePair<string, Ctl>("Estimativa ao vivo", NovaChave("estimativa", cfg.Estimativa, v => cfg.Estimativa = v)));
                     conta.Subs.Add(new KeyValuePair<string, Ctl>("Barra de status do Claude Code", barra));
-                    lista.Add(L("A estimativa ao vivo move o anel a cada resposta, pelos tokens gravados nas sessões, entre as leituras exatas do servidor (aparece com “~”). " +
-                        (deOutro ? "Já existe outra barra de status no Claude Code; o Pulso não a substitui." :
-                         "A barra de status entrega o consumo exato a cada resposta quando o Claude Code roda no terminal; ligar grava uma linha no ~/.claude/settings.json (com backup).")));
+                    lista.Add(L("Estimativa ao vivo: o anel anda a cada resposta, sem esperar o servidor (o número aparece com “~”). " +
+                        (deOutro ? "Barra de status: o Claude Code já usa outra barra, e o Pulso não a substitui." :
+                         "Barra de status: quando você usa o Claude Code no terminal, o número exato chega a cada resposta.")));
                 }
                 else if (info.Id == "codex" && ligado)
                     lista.Add(L("O Codex grava o consumo exato a cada resposta nos arquivos de sessão: chega na hora, sem rede. O servidor do ChatGPT só é consultado quando o Codex fica parado."));
