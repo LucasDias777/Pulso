@@ -8,10 +8,11 @@ using System.Windows.Forms;
 
 namespace Pulso
 {
-    // Texto nítido: o GDI+ (DrawString) desenha letra fina e borrada; aqui o texto é desenhado pelo GDI
-    // (ClearType, com hinting — o mesmo dos menus do Windows) sobre um bitmap opaco com a cor do fundo
-    // real e colado alinhado ao pixel. Só serve onde o fundo é sólido (pílula e cartão) — e é onde há texto.
-    // Medida e desenho usam o mesmo tipo de contexto (bitmap), senão a largura medida difere da desenhada.
+    // Texto nítido do notch e do cartão: o GDI+ (DrawString) desenha letra fina e borrada; aqui o texto vem
+    // do DirectWrite (DWrite.cs, em tons de cinza: sem franja colorida no tema escuro) sobre um bitmap opaco
+    // com a cor do fundo real e é colado alinhado ao pixel. Só serve onde o fundo é sólido (pílula e cartão) — e é onde há texto.
+    // Medida e desenho usam as mesmas métricas do DirectWrite, senão a largura medida difere da desenhada.
+    // Sem DirectWrite, ou com caractere que a fonte não tem, vai pelo GDI (TextRenderer), o caminho de reserva.
     static class TextoGdi
     {
         const TextFormatFlags Base = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
@@ -22,14 +23,43 @@ namespace Pulso
         static readonly Dictionary<string, Pronto> cache = new Dictionary<string, Pronto>();
         static readonly Queue<string> ordem = new Queue<string>();
 
+        // Font do GDI → fonte do DirectWrite: "Segoe UI Semibold" é a Segoe UI peso 600; negrito, 700.
+        // O tamanho em pixels é o f.Size (as fontes do notch são em GraphicsUnit.Pixel). Nulo = vai pelo GDI.
+        static DWrite.Fonte Dw(Font f, string texto)
+        {
+            if (!DWrite.Disponivel) return null;
+            string familia = f.Name;
+            int peso = f.Bold ? 700 : 400;
+            if (familia.EndsWith(" Semibold")) { familia = familia.Substring(0, familia.Length - " Semibold".Length); peso = 600; }
+            var d = DWrite.Obter(familia, peso);
+            return d != null && DWrite.Cobre(d, texto) ? d : null;
+        }
+
+        static int Largura(DWrite.Fonte d, Font f, string texto)
+        {
+            return (int)Math.Ceiling(DWrite.Largura(d, f.Size, texto));
+        }
+
+        // Altura da linha: a mesma que o GDI mede para a fonte, para o cartão manter o layout em todo tamanho
+        static int AlturaLinha(DWrite.Fonte d, Font f)
+        {
+            return MedirGdi("Ag", f).Height;
+        }
+
         public static Size Medir(string texto, Font f)
         {
-            return TextRenderer.MeasureText(medida, texto ?? "", f, Size.Empty, Base | TextFormatFlags.SingleLine);
+            if (string.IsNullOrEmpty(texto)) return Size.Empty;
+            var d = Dw(f, texto);
+            if (d == null) return MedirGdi(texto, f);
+            return new Size(Largura(d, f, texto), AlturaLinha(d, f));
         }
 
         public static int AlturaParagrafo(string texto, Font f, int largura)
         {
-            return TextRenderer.MeasureText(medida, texto ?? "", f, new Size(largura, int.MaxValue), Base | TextFormatFlags.WordBreak).Height;
+            if (string.IsNullOrEmpty(texto)) return 0;
+            var d = Dw(f, texto);
+            if (d == null) return TextRenderer.MeasureText(medida, texto, f, new Size(largura, int.MaxValue), Base | TextFormatFlags.WordBreak).Height;
+            return DWrite.Quebrar(d, f.Size, texto.Replace("\r", ""), largura).Count * AlturaLinha(d, f);
         }
 
         // Percentual do anel: dígitos tabulares (todos com a largura do "0") e centrado
@@ -93,7 +123,7 @@ namespace Pulso
 
         static Bitmap GdiTabular(string texto, Font f, Color cor, Color fundo)
         {
-            var tmp = new Bitmap(Medir(texto, f).Width * 2 + 16, Medir("0%", f).Height, PixelFormat.Format24bppRgb);
+            var tmp = new Bitmap(MedirGdi(texto, f).Width * 2 + 16, MedirGdi("0%", f).Height, PixelFormat.Format24bppRgb);
             using (var gt = Graphics.FromImage(tmp))
             {
                 gt.Clear(fundo);
@@ -138,23 +168,83 @@ namespace Pulso
         public static void Linha(Graphics g, string texto, Font f, Color cor, Color fundo, RectangleF ret, bool direita)
         {
             if (string.IsNullOrEmpty(texto) || ret.Width < 2) return;
-            var t = Medir(texto, f);
-            int w = Math.Min(t.Width + 1, (int)Math.Floor(ret.Width));
+            var d = Dw(f, texto);
+            if (d == null) { LinhaGdi(g, texto, f, cor, fundo, ret, direita); return; }
+            int max = (int)Math.Floor(ret.Width);
+            if (Largura(d, f, texto) > max)
+            {
+                while (texto.Length > 1 && Largura(d, f, texto + "…") > max) texto = texto.Substring(0, texto.Length - 1);
+                texto = texto.TrimEnd() + "…";
+            }
+            int lw = Largura(d, f, texto), h = AlturaLinha(d, f);
+            int w = Math.Min(lw + 1, max);
             int x = direita ? (int)Math.Floor(ret.Right) - w : (int)Math.Round(ret.Left);
-            int y = (int)Math.Round(ret.Top + (ret.Height - t.Height) / 2);
-            var flags = Base | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | (direita ? TextFormatFlags.Right : TextFormatFlags.Left);
-            Colar(g, texto, f, cor, fundo, new Rectangle(x, y, w, t.Height), flags);
+            int y = (int)Math.Round(ret.Top + (ret.Height - h) / 2);
+            // À esquerda o texto começa na borda do retângulo; à direita, termina nela
+            Colar(g, d, f, new List<string> { texto }, direita ? w - lw : 0, cor, fundo, new Rectangle(x, y, w, h));
         }
 
         public static int Paragrafo(Graphics g, string texto, Font f, Color cor, Color fundo, float x, float y, float largura)
         {
             int w = (int)Math.Floor(largura);
-            int h = AlturaParagrafo(texto, f, w);
-            if (g != null) Colar(g, texto, f, cor, fundo, new Rectangle((int)Math.Round(x), (int)Math.Round(y), w, h), Base | TextFormatFlags.WordBreak);
+            var d = string.IsNullOrEmpty(texto) ? null : Dw(f, texto);
+            if (d == null)
+            {
+                int hg = AlturaParagrafo(texto, f, w);
+                if (g != null) ColarGdi(g, texto, f, cor, fundo, new Rectangle((int)Math.Round(x), (int)Math.Round(y), w, hg), Base | TextFormatFlags.WordBreak);
+                return hg;
+            }
+            var linhas = DWrite.Quebrar(d, f.Size, texto.Replace("\r", ""), w);
+            int h = linhas.Count * AlturaLinha(d, f);
+            if (g != null) Colar(g, d, f, linhas, 0, cor, fundo, new Rectangle((int)Math.Round(x), (int)Math.Round(y), w, h));
             return h;
         }
 
-        static void Colar(Graphics g, string texto, Font f, Color cor, Color fundo, Rectangle r, TextFormatFlags flags)
+        // Bitmap do tamanho de r, opaco com a cor do fundo, com uma linha do DirectWrite a cada altura de linha
+        // (o texto começa em xTexto); fica no cache e é colado alinhado ao pixel
+        static void Colar(Graphics g, DWrite.Fonte d, Font f, List<string> linhas, int xTexto, Color cor, Color fundo, Rectangle r)
+        {
+            if (r.Width <= 0 || r.Height <= 0) return;
+            fundo = Color.FromArgb(255, fundo); cor = Color.FromArgb(255, cor);
+            string chave = "D\u0001" + string.Join("\n", linhas) + "\u0001" + f.Name + f.Size + (int)f.Style + "\u0001" + cor.ToArgb() + "|" + fundo.ToArgb() + "|" + r.Width + "x" + r.Height + "|" + xTexto;
+            Pronto p;
+            if (!cache.TryGetValue(chave, out p))
+            {
+                int alt = AlturaLinha(d, f);
+                var bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format24bppRgb);
+                using (var gt = Graphics.FromImage(bmp))
+                {
+                    gt.Clear(fundo);
+                    gt.PixelOffsetMode = PixelOffsetMode.None;
+                    gt.InterpolationMode = InterpolationMode.NearestNeighbor;
+                    for (int i = 0; i < linhas.Count; i++)
+                        using (var b = DWrite.Desenhar(d, f.Size, linhas[i], cor, fundo, alt))
+                            if (b != null) gt.DrawImage(b, xTexto - 1, i * alt, b.Width, b.Height); // o bitmap do DirectWrite tem 1 px de folga à esquerda
+                }
+                p = new Pronto { Bmp = bmp };
+                Guardar(chave, p);
+            }
+            Desenhar(g, p.Bmp, r, 1);
+        }
+
+        // ---- reserva pelo GDI (sem DirectWrite ou com caractere que a fonte não tem) ----
+
+        static Size MedirGdi(string texto, Font f)
+        {
+            return TextRenderer.MeasureText(medida, texto ?? "", f, Size.Empty, Base | TextFormatFlags.SingleLine);
+        }
+
+        static void LinhaGdi(Graphics g, string texto, Font f, Color cor, Color fundo, RectangleF ret, bool direita)
+        {
+            var t = MedirGdi(texto, f);
+            int w = Math.Min(t.Width + 1, (int)Math.Floor(ret.Width));
+            int x = direita ? (int)Math.Floor(ret.Right) - w : (int)Math.Round(ret.Left);
+            int y = (int)Math.Round(ret.Top + (ret.Height - t.Height) / 2);
+            var flags = Base | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | (direita ? TextFormatFlags.Right : TextFormatFlags.Left);
+            ColarGdi(g, texto, f, cor, fundo, new Rectangle(x, y, w, t.Height), flags);
+        }
+
+        static void ColarGdi(Graphics g, string texto, Font f, Color cor, Color fundo, Rectangle r, TextFormatFlags flags)
         {
             if (r.Width <= 0 || r.Height <= 0) return;
             fundo = Color.FromArgb(255, fundo); cor = Color.FromArgb(255, cor);

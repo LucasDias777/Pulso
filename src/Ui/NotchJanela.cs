@@ -67,6 +67,9 @@ namespace Pulso
         [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc proc, uint pid, uint thread, uint flags);
         [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);
+        [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int indice);
+        const int GWL_STYLE = -16, WS_CAPTION = 0xC00000, WS_THICKFRAME = 0x40000;
         WinEventProc procPrimeiroPlano;
         IntPtr ganchoPrimeiroPlano;
 
@@ -135,17 +138,26 @@ namespace Pulso
             base.WndProc(ref m);
         }
 
-        // Outra janela foi para a frente: volta ao topo; e some se ela ocupa a tela inteira (jogo, vídeo, apresentação)
+        // Outra janela foi para a frente: volta ao topo; e some se ela está em tela cheia (jogo, vídeo, apresentação)
         void AoTrocarPrimeiroPlano(IntPtr hook, uint ev, IntPtr hwnd, int idObj, int idChild, uint thread, uint time)
         {
             var pp = PrimeiroPlano;
             if (pp != null) pp(hwnd);
-            bool cheia = OcupaTelaInteira(hwnd);
-            if (cheia != telaCheia) { telaCheia = cheia; Renderizar(); }
+            AvaliarTelaCheia(hwnd);
             if (!telaCheia && IsHandleCreated && Visible)
                 Nativo.SetWindowPos(Handle, Nativo.HWND_TOPMOST, 0, 0, 0, 0, Nativo.SWP_NOMOVE | Nativo.SWP_NOSIZE | Nativo.SWP_NOACTIVATE);
         }
 
+        // Só redesenha quando o estado muda
+        void AvaliarTelaCheia(IntPtr hwnd)
+        {
+            bool cheia = OcupaTelaInteira(hwnd);
+            if (cheia != telaCheia) { telaCheia = cheia; Renderizar(); }
+        }
+
+        // Tela cheia: cobre o monitor do notch e não é maximizada com moldura (WS_CAPTION ou WS_THICKFRAME).
+        // Maximizada comum também cobre o monitor quando a barra se oculta ou está em outro monitor (sobra a
+        // borda invisível de 8 px); F11, vídeo, jogo sem borda e apresentação tiram a moldura.
         bool OcupaTelaInteira(IntPtr hwnd)
         {
             if (hwnd == IntPtr.Zero || hwnd == Handle) return false;
@@ -156,11 +168,17 @@ namespace Pulso
             Nativo.RECT r;
             if (!Nativo.GetWindowRect(hwnd, out r)) return false;
             var ret = Nativo.Ret(r);
-            return ret.Contains(monitor) && monitor.Width > 0;
+            if (!ret.Contains(monitor) || monitor.Width <= 0) return false;
+            int estilo = GetWindowLong(hwnd, GWL_STYLE);
+            bool moldura = (estilo & WS_CAPTION) == WS_CAPTION || (estilo & WS_THICKFRAME) != 0;
+            return !(moldura && IsZoomed(hwnd));
         }
 
         void Vigiar()
         {
+            // F11 ou sair do vídeo não trocam de janela: reavalia a da frente a cada segundo
+            var frente = Nativo.GetForegroundWindow();
+            if (frente != IntPtr.Zero) AvaliarTelaCheia(frente);
             // Área de trabalho mudou (barra de tarefas, resolução): reposiciona
             var alvo = MonitorAlvo();
             if (alvo.WorkingArea != area || alvo.Bounds != monitor) Reposicionar();

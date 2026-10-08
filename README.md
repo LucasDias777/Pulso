@@ -81,7 +81,7 @@
 | **Instala como um app** | Fica em Programas, no Menu Iniciar e em Configurações › Aplicativos do Windows, com Desinstalar; atualiza pelo próprio app |
 | **Três modos de exibição** | Sempre aberto; recolhido numa cápsula pequena que abre ao passar o cursor (com a opção de a cápsula mudar de cor conforme o fundo); ou oculto, só com o ícone na bandeja |
 | **Qualquer borda, qualquer monitor** | Direita, esquerda, superior ou inferior, em qualquer tela. Arrastável pelos pontinhos, pela engrenagem ou com Alt, ou fixo no meio da borda |
-| **Some em tela cheia** | Jogo, vídeo ou apresentação em tela cheia escondem o notch sozinhos |
+| **Some em tela cheia** | Jogo, vídeo ou apresentação em tela cheia escondem o notch sozinhos, e ele volta ao sair. Janela maximizada não conta, mesmo com a barra de tarefas em ocultar automaticamente |
 | **Atalho global** | `Win + Y` mostra e oculta o notch de qualquer lugar; dá para gravar outra combinação |
 | **Bandeja do sistema** | Ícone com um mini-anel e um menu com todas as leituras e horários de renovação |
 | **Inicia com o Windows** | Abre sozinho ao entrar no Windows e fica quieto em segundo plano |
@@ -162,7 +162,7 @@ O Pulso não usa nenhum pacote externo: tudo vem do próprio Windows e do .NET F
 | **.NET Framework 4.8** | Runtime (já instalado no Windows 10 1903+ e no Windows 11) |
 | **Windows Forms** | Janelas, ícone da bandeja e menus |
 | **GDI+** | Desenho do notch, dos anéis, dos cartões e das Configurações |
-| **DirectWrite** | Texto nítido dos percentuais (Segoe UI peso 600, dígitos tabulares) e das Configurações |
+| **DirectWrite** | Todo o texto do notch, dos cartões e das Configurações, desenhado como o Chromium: máscara ClearType de cada letra, modo pela tabela `gasp` da fonte, posição em 1/4 de pixel e a mistura do Skia (gamma sRGB). Nítido em qualquer tamanho e monitor, igual no Windows 10 e no 11 |
 | **Win32** | Janela transparente por pixel (`UpdateLayeredWindow`), atalho global (`RegisterHotKey`), gravação do atalho (gancho de teclado), detecção de tela cheia (`SetWinEventHook`) e DPI por monitor |
 | **winsqlite3.dll** | SQLite nativo do Windows, para ler os bancos locais do Cursor e do OpenCode |
 | **WMI** | Localizar o servidor local do Antigravity |
