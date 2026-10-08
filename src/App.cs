@@ -29,7 +29,8 @@ namespace Pulso
             }
             if (args.Length > 1 && args[0] == "--captura")
             {
-                Mensagens.Enviar(3, System.IO.Path.GetFullPath(args[1]));
+                // --captura <pasta> [escala] [cinza]
+                Mensagens.Enviar(3, System.IO.Path.GetFullPath(args[1]) + (args.Length > 2 ? "|" + string.Join("|", args, 2, args.Length - 2) : ""));
                 return;
             }
             // Diagnóstico: notch e cartões em PNG em várias escalas, sem abrir o app (só lê a config e o estado)
@@ -113,6 +114,15 @@ namespace Pulso
                         () => Log.Info("teste de atalho: cancelado"));
                 else if (tipo == 3)
                 {
+                    // "pasta" ou "pasta|escala|cinza" (imagens do README: escala fixa e texto em cinza)
+                    var partes = texto.Split('|');
+                    float escala;
+                    if (partes.Length > 1 && float.TryParse(partes[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out escala) && escala > 0)
+                    {
+                        DWrite.Cinza = partes.Length > 2 && partes[2] == "cinza";
+                        try { Notch.Capturar(partes[0], escala); } finally { DWrite.Cinza = false; }
+                        return;
+                    }
                     Notch.Capturar(texto);
                     Retrato(texto);
                     try { Configuracoes.Capturar(this, texto); } catch (Exception e) { Log.Erro("captura das configurações", e); }

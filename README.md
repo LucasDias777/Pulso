@@ -364,6 +364,7 @@ Para levar a mudança para a versão instalada, rode o `instalar.cmd`. O `build.
 |---|---|
 | `Pulso.exe` | Abre o Pulso; se ele já estiver rodando, abre as Configurações |
 | `Pulso.exe --captura <pasta>` | Salva em PNG a cápsula aberta, o cartão de cada provedor, a cápsula recolhida e as três abas das Configurações, sem mexer no que está na tela |
+| `Pulso.exe --captura <pasta> <escala> cinza` | Só a cápsula e os cartões, numa escala fixa (ex.: `2`) e com o texto em cinza: as imagens deste README |
 | `Pulso.exe --bancada <pasta> [1x0.8,1.25x1,…]` | Sem abrir o app, salva em PNG a cápsula e os cartões em cada combinação de escala do monitor × tamanho (padrão: 100/125/150% × Pequeno/Médio/Grande), para conferir o texto em telas que não estão ligadas |
 | `Pulso.exe --previa` | Mostra um cartão de aviso de exemplo |
 | `Pulso.exe --gravar-teste` | Testa a gravação de um atalho novo e registra o resultado no log |

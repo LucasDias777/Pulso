@@ -375,6 +375,17 @@ namespace Pulso
             finally { slotCartao = slotAntes; dentro = dentroAntes; expansao = expAntes; Renderizar(); }
         }
 
+        // Imagens do README (--captura <pasta> <escala>): as mesmas capturas numa escala fixa, com os dados de agora,
+        // sem mexer no que está na tela
+        public void Capturar(string pasta, float escala)
+        {
+            bool antes = soCaptura;
+            soCaptura = true;
+            monitorFixo = escala; tamanhoFixo = 1;
+            try { Reposicionar(); Capturar(pasta); }
+            finally { monitorFixo = 0; tamanhoFixo = 0; soCaptura = antes; Reposicionar(); }
+        }
+
         // Bancada (--bancada): as mesmas capturas em combinações de escala do monitor × tamanho do notch
         // ("1.25x0.8"), uma pasta por combinação, sem abrir o app nem mostrar janela
         static bool soCaptura;

@@ -21,6 +21,10 @@ namespace Pulso
         // Monitor onde o texto aparece (o do notch); zero = o primário
         public static IntPtr Monitor;
 
+        // Imagens de documentação (--captura com escala): cinza em vez de ClearType, porque o navegador redimensiona a imagem
+        static bool cinza;
+        public static bool Cinza { get { return cinza; } set { cinza = value; ajuste = null; } }
+
         // Gama e contraste do caminho antigo (render target de bitmap), mantido só como reserva se o novo falhar
         const float Gamma = 2.2f;
         const float Contraste = 3.0f;
@@ -305,7 +309,7 @@ namespace Pulso
                 }
             }
             finally { if (p != null) Marshal.ReleaseComObject(p); }
-            if (!ClearTypeLigado()) a.Geometria = 0;
+            if (cinza || !ClearTypeLigado()) a.Geometria = 0;
             a.Assinatura = a.Geometria + "|" + a.Nivel + "|" + a.Gama + "|" + a.Realce;
             ajuste = a; ajusteDe = mon; ajusteLidoEm = Environment.TickCount;
             return a;
