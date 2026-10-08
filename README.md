@@ -32,7 +32,7 @@
 
 <br/>
 
-<a href="https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe"><img alt="Instalar Pulso" src="https://img.shields.io/badge/INSTALAR_PULSO-0078D4?style=for-the-badge&logo=windows&logoColor=white" width="420" /></a>
+<a href="https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe"><img alt="Instalar Pulso" src="https://img.shields.io/badge/INSTALAR_PULSO-0078D4?style=for-the-badge&logo=windows&logoColor=white" width="280" /></a>
 
 <br/><br/>
 
