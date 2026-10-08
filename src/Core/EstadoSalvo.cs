@@ -10,6 +10,9 @@ namespace Pulso
     {
         public static DateTime ClaudeEsperaAte = DateTime.MinValue;
         public static readonly Dictionary<string, double> Calibracao = new Dictionary<string, double>();
+        // 2: calibração entre leituras exatas. A de antes (desde o início da janela) pode ter sido inflada por uso
+        // feito em outro computador, então é descartada e refeita nas próximas leituras
+        const int VersaoCalibracao = 2;
         static readonly object trava = new object();
         static DateTime ultimaGravacao = DateTime.MinValue;
 
@@ -23,7 +26,7 @@ namespace Pulso
                 var o = Json.Parse(File.ReadAllText(Caminhos.Estado));
                 ClaudeEsperaAte = Json.Data(o, "claudeEsperaAte") ?? DateTime.MinValue;
                 var cal = Json.Obj(o, "calibracao");
-                if (cal != null)
+                if (cal != null && (Json.Num(o, "calibracaoVersao") ?? 1) >= VersaoCalibracao)
                     foreach (var kv in cal)
                     {
                         double? v = Json.Num(cal, kv.Key);
@@ -94,6 +97,7 @@ namespace Pulso
                 {
                     { "claudeEsperaAte", espera > DateTime.UtcNow ? (object)Tempo.UnixMs(espera) : null },
                     { "calibracao", cal },
+                    { "calibracaoVersao", VersaoCalibracao },
                 };
                 lock (Estado.Trava)
                     foreach (var p in Estado.Todos)

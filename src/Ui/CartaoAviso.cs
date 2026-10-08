@@ -12,6 +12,7 @@ namespace Pulso
         public Color? CorStatus;     // nulo = verde (cota disponível)
         public Som Som;
         public Action Clique;        // clicar no cartão (ex.: ir para a janela da sessão)
+        public DateTime Chegou;      // UTC; guardado em tela cheia, vale por 15 min
     }
 
     // Cartão de aviso ao lado do notch: 246×128,
@@ -29,10 +30,12 @@ namespace Pulso
         Rectangle janela;
         RectangleF cartaoLocal, fecharLocal;
         static readonly TimeSpan Duracao = TimeSpan.FromSeconds(6);
+        static readonly TimeSpan Validade = TimeSpan.FromMinutes(15);
 
         public CartaoAviso(NotchJanela notch)
         {
             this.notch = notch;
+            notch.SaiuDaTelaCheia += delegate { if (atual == null && fila.Count > 0) Proximo(); };
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
@@ -63,14 +66,17 @@ namespace Pulso
 
         public void Mostrar(Aviso a)
         {
-            if (notch.TelaCheia) return; // jogo, vídeo, apresentação: não interrompe
+            a.Chegou = DateTime.UtcNow;
             fila.Enqueue(a);
             if (atual == null) Proximo();
         }
 
         void Proximo()
         {
-            if (fila.Count == 0)
+            // Jogo, vídeo, apresentação: não interrompe; a fila espera a tela cheia acabar (SaiuDaTelaCheia),
+            // e o que ficou mais de 15 min esperando já não diz nada
+            while (fila.Count > 0 && DateTime.UtcNow - fila.Peek().Chegou > Validade) fila.Dequeue();
+            if (fila.Count == 0 || notch.TelaCheia)
             {
                 atual = null;
                 relogio.Stop();

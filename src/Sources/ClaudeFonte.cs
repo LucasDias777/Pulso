@@ -7,7 +7,7 @@ namespace Pulso
 {
     // Junta as fontes do Claude:
     //  - leitura exata (servidor, ou barra de status do Claude Code no terminal) = âncora;
-    //  - calibração por janela: k = % da janela ÷ custo local gasto desde o início dela (UMA leitura basta);
+    //  - calibração por janela: k = pontos que a janela subiu ÷ custo gasto NESTE computador entre duas leituras exatas;
     //  - estimativa = % exato + k × custo gasto depois da leitura — anda a cada resposta, sem esperar o servidor.
     class ClaudeFonte : IDisposable
     {
@@ -19,10 +19,14 @@ namespace Pulso
             public double CustoJanela = double.NaN; // custo local de Inicio até a leitura (NaN = índice ainda não pronto)
         }
 
+        // Ponto de partida da calibração de cada janela: a leitura exata e o custo ao vivo deste computador até ela
+        class Referencia { public double Usado, Custo; public DateTime? Reset; }
+
         readonly ClaudeSessoes transcritos = new ClaudeSessoes();
         readonly ClaudeRegistro registro = new ClaudeRegistro();
         ClaudeServidor servidor;
         readonly Dictionary<string, Ancora> ancoras = new Dictionary<string, Ancora>();
+        readonly Dictionary<string, Referencia> referencias = new Dictionary<string, Referencia>(); // sob travaAncoras
         readonly object travaAncoras = new object();
         Timer relogio;
 
@@ -91,7 +95,7 @@ namespace Pulso
                 foreach (var kv in janelas)
                 {
                     var a = NovaAncora(kv.Value, agora);
-                    if (transcritos.Pronto) { a.CustoJanela = transcritos.CustoDesde(a.Inicio); Calibrar(kv.Key, a); }
+                    if (transcritos.Pronto) { a.CustoJanela = transcritos.CustoDesde(a.Inicio); Calibrar(kv.Key, kv.Value); }
                     ancoras[kv.Key] = a;
                 }
             lock (Estado.Trava)
@@ -121,17 +125,13 @@ namespace Pulso
             EstadoSalvo.Gravar();
         }
 
-        // Índice completo: as âncoras de antes ganham o custo da janela e calibram
+        // Índice completo: as âncoras de antes ganham o custo da janela (a estimativa volta a andar com o k salvo);
+        // a calibração começa na próxima leitura exata, que vira o ponto de partida
         void IndiceEmDia()
         {
             lock (travaAncoras)
                 foreach (var kv in ancoras)
-                {
-                    if (!double.IsNaN(kv.Value.CustoJanela)) continue;
-                    kv.Value.CustoJanela = transcritos.CustoEntre(kv.Value.Inicio, kv.Value.Quando);
-                    // Leitura velha calibraria com dado vencido; só a recente (de até 30 min) ensina
-                    if ((DateTime.UtcNow - kv.Value.Quando).TotalMinutes <= 30) Calibrar(kv.Key, kv.Value);
-                }
+                    if (double.IsNaN(kv.Value.CustoJanela)) kv.Value.CustoJanela = transcritos.CustoEntre(kv.Value.Inicio, kv.Value.Quando);
             Recalcular();
         }
 
@@ -140,17 +140,43 @@ namespace Pulso
             switch (id) { case "session": return 0; case "weekly_all": return 1; case "weekly_opus": return 2; case "weekly_sonnet": return 3; default: return 9; }
         }
 
-        // k = % da janela ÷ custo gasto nela. Com uso pequeno o ruído domina (o servidor dá % inteiro): exige mínimo.
-        void Calibrar(string id, Ancora a)
+        // k = pontos que a janela subiu ÷ custo gasto neste computador entre duas leituras exatas (chamado sob travaAncoras).
+        // O mesmo login usado em outro computador sobe o % sem custo aqui: medir desde o início da janela punha tudo na
+        // conta deste PC e inflava k (de 0,008 para 0,45; o anel ia a ~89% com 60% exatos). Entre duas leituras quem usa
+        // é um computador por vez, então o salto feito no outro fica dentro da leitura exata e não ensina nada.
+        void Calibrar(string id, Janela j)
         {
-            if (a.Usado < 0.03 || double.IsNaN(a.CustoJanela) || a.CustoJanela < 0.5) return;
-            double kNovo = a.Usado / a.CustoJanela;
+            double custo = transcritos.CustoAoVivo;
+            Referencia r;
+            referencias.TryGetValue(id, out r);
+            // Primeira leitura, janela renovada ou outra janela: só marca o ponto de partida
+            if (r == null || j.Usado < r.Usado - 0.005 || (j.ResetaEm.HasValue && r.Reset.HasValue && Math.Abs((j.ResetaEm.Value - r.Reset.Value).TotalMinutes) > 60))
+            {
+                referencias[id] = Ref(j, custo);
+                return;
+            }
+            double sobe = j.Usado - r.Usado, gasto = custo - r.Custo;
             double k0;
             lock (EstadoSalvo.Calibracao) EstadoSalvo.Calibracao.TryGetValue(id, out k0);
-            double k = k0 > 0 ? k0 * 0.4 + kNovo * 0.6 : kNovo;
+            // Subiu mais do que o gasto daqui explica: uso de outro computador; recomeça desta leitura
+            if (gasto < 0.05 ? sobe >= 0.02 : k0 > 0 && sobe > 3 * k0 * gasto + 0.02)
+            {
+                Log.Info("claude: " + id + " subiu " + Math.Round(sobe * 100) + " pontos com US$" + gasto.ToString("0.00") + " gastos aqui (uso de outro computador); calibração mantida");
+                referencias[id] = Ref(j, custo);
+                return;
+            }
+            // O servidor dá % inteiro: espera 3 pontos e um gasto que não seja ruído (sem k anterior, ao menos US$ 0,50)
+            if (sobe < 0.03 || gasto < (k0 > 0 ? 0.1 : 0.5)) return;
+            referencias[id] = Ref(j, custo);
+            double kNovo = sobe / gasto, k;
+            if (k0 <= 0 || kNovo < k0 / 3) k = kNovo;   // primeira, ou a anterior estava inflada: troca de vez
+            else if (kNovo > k0 * 3) return;             // salto que o uso de fora não explicou: não ensina
+            else k = k0 * 0.4 + kNovo * 0.6;
             lock (EstadoSalvo.Calibracao) EstadoSalvo.Calibracao[id] = k;
-            Log.Info("claude: calibração " + id + " = " + k.ToString("0.00000") + " (" + Math.Round(a.Usado * 100) + "% / US$" + a.CustoJanela.ToString("0.00") + " desde " + a.Inicio.ToLocalTime().ToString("dd/MM HH:mm") + ")");
+            Log.Info("claude: calibração " + id + " = " + k.ToString("0.00000") + " (+" + Math.Round(sobe * 100) + " pontos / US$" + gasto.ToString("0.00") + " gastos aqui)");
         }
+
+        static Referencia Ref(Janela j, double custo) { return new Referencia { Usado = j.Usado, Custo = custo, Reset = j.ResetaEm }; }
 
         // Estimativa = % exato + k × custo gasto depois da leitura, na mesma janela
         void Recalcular()

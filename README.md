@@ -135,7 +135,7 @@ flowchart LR
     Pulso <--> Dados
 ```
 
-**A estimativa do Claude.** O servidor da Anthropic aceita poucas consultas (responde `429` se consultado demais). Para o anel não ficar parado entre uma leitura e outra, o Pulso mantém um índice do custo de cada minuto de uso, montado a partir dos tokens gravados nas sessões. Com uma única leitura exata ele calcula quanto cada dólar de uso representa da janela (`% da janela ÷ custo desde o início da janela`) e, a partir daí, soma o custo das respostas novas. O número estimado aparece com `~` e é corrigido a cada leitura exata.
+**A estimativa do Claude.** O servidor da Anthropic aceita poucas consultas (responde `429` se consultado demais). Para o anel não ficar parado entre uma leitura e outra, o Pulso mantém um índice do custo de cada minuto de uso, montado a partir dos tokens gravados nas sessões. Entre duas leituras exatas ele calcula quanto cada dólar gasto neste computador representa da janela (`pontos que a janela subiu ÷ custo gasto aqui entre as leituras`) e, a partir daí, soma o custo das respostas novas. Assim, o uso da mesma conta em outro computador entra no número exato e não infla a estimativa. O número estimado aparece com `~` e é corrigido a cada leitura exata.
 
 ### Com que frequência cada leitura acontece
 

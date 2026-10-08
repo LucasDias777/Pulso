@@ -56,6 +56,7 @@ namespace Pulso
         public Rectangle AreaTrabalho { get { return area; } }
         public bool TelaCheia { get { return telaCheia; } }
         public event Action<IntPtr> PrimeiroPlano;
+        public event Action SaiuDaTelaCheia;     // os avisos guardados durante a tela cheia podem aparecer
 
         public PointF? CentroDoAnel(string id)
         {
@@ -153,7 +154,11 @@ namespace Pulso
         void AvaliarTelaCheia(IntPtr hwnd)
         {
             bool cheia = OcupaTelaInteira(hwnd);
-            if (cheia != telaCheia) { telaCheia = cheia; Renderizar(); }
+            if (cheia == telaCheia) return;
+            telaCheia = cheia;
+            Renderizar();
+            var h = SaiuDaTelaCheia;
+            if (!cheia && h != null) h();
         }
 
         // Tela cheia: cobre o monitor do notch e não é maximizada com moldura (WS_CAPTION ou WS_THICKFRAME).
@@ -196,6 +201,7 @@ namespace Pulso
 
         public void Atualizada(string id)
         {
+            if (!slots.Contains(id)) return; // provedor sem anel (ativado mas não instalado): não há o que girar
             girando[id] = DateTime.UtcNow;
             Renderizar();
         }
@@ -897,8 +903,10 @@ namespace Pulso
                 y += hs;
             }
 
-            // Ritmo e projeção
-            string ritmo = Texto.Ritmo(p.RitmoHora, p.Principal);
+            // Ritmo e projeção. O ritmo é medido na janela principal da leitura; com o Ritmo do dia na frente
+            // (só no cartão), essa janela é a sessão de 5h, não a do dia
+            var principal = p.Principal;
+            string ritmo = Texto.Ritmo(p.RitmoHora, principal != null && principal.Id == "daily_pace" ? p.PorId("session") : principal);
             if (ritmo != null) { y += 8 * sCartao; y += Paragrafo(med, g, ritmo, fPeq, pal.Tinta4, x, y, w); }
 
             if (p.Detalhe != null && p.Janelas.Count > 0) { y += 8 * sCartao; y += Paragrafo(med, g, p.Detalhe.T(), fNota, pal.Tinta3, x, y, w, hNota); }
@@ -1017,6 +1025,9 @@ namespace Pulso
             bool amostrar = cfg.CapsulaAdaptavel && cfg.Mostrar == Mostrar.AoPassar && expansao <= 0 && Visible;
             if (amostrar && !amostra.Enabled) { amostra.Start(); AmostrarFundo(); }
             else if (!amostrar && amostra.Enabled) amostra.Stop();
+            // O giro do clique só é apagado ao desenhar o anel; recolhida (ou sem o anel) a marca ficaria para sempre
+            // e prenderia o relógio em 60 fps
+            foreach (var id in girando.Where(kv => (DateTime.UtcNow - kv.Value).TotalMilliseconds > 950).Select(kv => kv.Key).ToList()) girando.Remove(id);
             int intervalo = 0;
             if (animando || girando.Count > 0) intervalo = 16;
             else if (expansao > 0 && provs.Any(p => p.Atividade == Atividade.Trabalhando)) intervalo = 100;

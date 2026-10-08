@@ -41,13 +41,19 @@ namespace Pulso
 
         public static void Garantir() { Directory.CreateDirectory(Dados); }
 
+        static readonly object travaGravar = new object();
+
         // Escrita atômica: grava ao lado e troca, para um leitor nunca ver o arquivo pela metade.
+        // Uma gravação por vez: leituras de threads diferentes salvam o mesmo arquivo pelo mesmo .tmp
         public static void GravarAtomico(string arq, string conteudo)
         {
-            string tmp = arq + ".tmp";
-            File.WriteAllText(tmp, conteudo, new UTF8Encoding(false));
-            if (File.Exists(arq)) File.Replace(tmp, arq, null);
-            else File.Move(tmp, arq);
+            lock (travaGravar)
+            {
+                string tmp = arq + ".tmp";
+                File.WriteAllText(tmp, conteudo, new UTF8Encoding(false));
+                if (File.Exists(arq)) File.Replace(tmp, arq, null);
+                else File.Move(tmp, arq);
+            }
         }
 
         // Lê arquivo que outro processo mantém aberto para escrita

@@ -84,12 +84,10 @@ namespace Pulso
                     Application.DoEvents();
                     using (var b = new Bitmap(j.Width, j.Height))
                     {
-                        using (var g = Graphics.FromImage(b))
-                        {
-                            IntPtr hdc = g.GetHdc();
-                            PrintWindow(j.Handle, hdc, 2); // PW_RENDERFULLCONTENT: moldura como o Windows desenha
-                            g.ReleaseHdc(hdc);
-                        }
+                        Fotografar(j, b, 2); // PW_RENDERFULLCONTENT: moldura como o Windows desenha
+                        // O Windows 10 não compõe janela fora da tela: o miolo vem vazio. Sem o PW_RENDERFULLCONTENT os
+                        // controles se desenham (a moldura sai no estilo antigo)
+                        if (MioloVazio(j, b)) Fotografar(j, b, 0);
                         b.Save(System.IO.Path.GetFullPath(args[1]), System.Drawing.Imaging.ImageFormat.Png);
                     }
                 }
@@ -118,6 +116,31 @@ namespace Pulso
                 EstadoSalvo.Gravar(true);
                 Log.Info("Pulso encerrado");
             }
+        }
+
+        static void Fotografar(Form j, Bitmap b, uint modo)
+        {
+            using (var g = Graphics.FromImage(b))
+            {
+                g.Clear(Color.Transparent);
+                IntPtr hdc = g.GetHdc();
+                PrintWindow(j.Handle, hdc, modo);
+                g.ReleaseHdc(hdc);
+            }
+        }
+
+        // Área do cliente toda de uma cor só = nada se desenhou
+        static bool MioloVazio(Form j, Bitmap b)
+        {
+            var o = j.PointToScreen(Point.Empty);
+            var r = new Rectangle(o.X - j.Left, o.Y - j.Top, j.ClientSize.Width, j.ClientSize.Height);
+            r.Intersect(new Rectangle(0, 0, b.Width, b.Height));
+            if (r.Width <= 0 || r.Height <= 0) return true;
+            var cor = b.GetPixel(r.X, r.Y);
+            for (int y = r.Top; y < r.Bottom; y += 2)
+                for (int x = r.Left; x < r.Right; x += 2)
+                    if (b.GetPixel(x, y) != cor) return false;
+            return true;
         }
     }
 

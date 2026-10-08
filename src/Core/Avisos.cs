@@ -47,6 +47,8 @@ namespace Pulso
 
         void Janelas(Provedor p, Config cfg, Paleta pal)
         {
+            // O ritmo (RitmoHora) é o da janela principal: projetá-lo na semana dizia que ela esgotava em horas
+            var principal = p.Principal;
             foreach (var j in p.Janelas)
             {
                 string chave = p.Id + "|" + j.Id;
@@ -68,7 +70,7 @@ namespace Pulso
                                 Subtitulo = j.Rotulo.T(),
                                 Status = lim >= 1 ? "Sem cota até renovar".T() : "{0}% restante".T(100 - pct),
                                 CorStatus = lim >= 0.95 ? pal.Critico : pal.Atencao,
-                                Proxima = Juntar(Texto.Renova(j.ResetaEm), lim < 1 ? Texto.Esgota(p.RitmoHora, j) : null),
+                                Proxima = Juntar(Texto.Renova(j.ResetaEm), lim < 1 && j == principal ? Texto.Esgota(p.RitmoHora, j) : null),
                                 Som = Som.Limite,
                             });
                         }

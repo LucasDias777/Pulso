@@ -9,7 +9,7 @@ namespace Pulso
     // Lê os registros de sessão do Claude Code (~/.claude/projects/**/*.jsonl, subagentes inclusive).
     // Cada resposta do modelo é gravada na hora com o uso de tokens; daqui sai um índice de custo por minuto
     // (dólares de API equivalentes, pelo preço de cada modelo), dos últimos 8 dias. Com ele:
-    //  - a calibração sai de UMA leitura exata: % da janela ÷ custo gasto desde o início da janela;
+    //  - a calibração sai de duas leituras exatas: pontos que a janela subiu ÷ custo gasto aqui entre elas;
     //  - o medidor anda a cada resposta entre leituras exatas.
     // O índice e a posição lida de cada arquivo ficam em %APPDATA%\Pulso\custos.json: o atrasado
     // (que pode passar de 1 GB) é lido uma vez só; nas próximas aberturas, só o que foi acrescentado.
@@ -26,6 +26,7 @@ namespace Pulso
         readonly Queue<string> ordemMensagens = new Queue<string>();
         Dictionary<string, long> posicoesSalvas = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         bool mudouDesdeSalvar;
+        double custoAoVivo;                      // soma do custo das respostas recentes desde que o Pulso abriu
 
         public event Action NovoCusto;           // uma resposta recente entrou no índice
         public event Action FimDeTurno;          // uma sessão principal terminou de responder (agora)
@@ -113,6 +114,7 @@ namespace Pulso
                 double v;
                 porMinuto.TryGetValue(min, out v);
                 porMinuto[min] = v + delta;
+                if (recente) custoAoVivo += delta;
                 mudouDesdeSalvar = true;
                 Projetos.Claude.Somar(quando, pasta, delta);
             }
@@ -122,6 +124,10 @@ namespace Pulso
                 if (h != null) h();
             }
         }
+
+        // Custo das respostas gravadas neste computador desde que o Pulso abriu (só cresce): a diferença entre
+        // duas leituras exatas é o que foi gasto aqui entre elas, sem o atrasado e sem contar um minuto duas vezes
+        public double CustoAoVivo { get { lock (trava) return custoAoVivo; } }
 
         // Custo gasto a partir de um instante (resolução de 1 minuto)
         public double CustoDesde(DateTime inicioUtc)
