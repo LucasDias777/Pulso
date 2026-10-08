@@ -85,7 +85,7 @@ namespace Pulso
         const string Run = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
         // Só grava quando falta ou aponta para outro lugar: regravar a cada abertura é o que o antivírus
-        // reconhece como vírus se fixando no sistema
+        // reconhece como vírus se fixando no sistema. "--inicio": aberto pelo Windows, fica só na bandeja.
         public static void IniciarComWindows(bool ligar)
         {
             try
@@ -93,7 +93,7 @@ namespace Pulso
                 using (var k = Registry.CurrentUser.OpenSubKey(Run, true))
                 {
                     if (k == null) return;
-                    string valor = "\"" + Exe + "\"";
+                    string valor = "\"" + Exe + "\" --inicio";
                     if (ligar) { if (!string.Equals(k.GetValue("Pulso") as string, valor, StringComparison.OrdinalIgnoreCase)) k.SetValue("Pulso", valor); }
                     else if (k.GetValue("Pulso") != null) k.DeleteValue("Pulso");
                 }

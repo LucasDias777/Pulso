@@ -27,7 +27,9 @@ namespace Pulso
             icone.MouseUp += (s, e) =>
             {
                 if (e.Button != MouseButtons.Left) return;
-                // Clique esquerdo também abre o menu
+                // Com a cápsula oculta (atalho ou início com o Windows), o clique esquerdo a mostra
+                if (app.Notch.OcultoPeloAtalho && Config.Atual.Mostrar != Mostrar.Oculto) { app.Notch.AlternarVisivel(); return; }
+                // Senão, também abre o menu
                 var mi = typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
                 if (mi != null) mi.Invoke(icone, null);
             };

@@ -64,13 +64,14 @@ namespace Pulso
                 Environment.Exit(Instalacao.InstalarDaqui());
             }
 
+            bool inicio = args.Length > 0 && args[0] == "--inicio"; // aberto pelo Windows ao entrar (chave Run)
             bool novo;
             using (var unica = new Mutex(true, @"Local\Pulso", out novo))
             {
                 if (!novo)
                 {
-                    // Já está rodando: a segunda execução só abre as Configurações da primeira
-                    Mensagens.Enviar(1, "config");
+                    // Já está rodando: a segunda execução só abre as Configurações da primeira (a do Windows, nada)
+                    if (!inicio) Mensagens.Enviar(1, "config");
                     return;
                 }
                 Application.EnableVisualStyles();
@@ -78,10 +79,10 @@ namespace Pulso
                 Application.ThreadException += (s, e) => Log.Erro("interface", e.Exception);
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => Log.Info("ERRO fatal: " + e.ExceptionObject);
                 Caminhos.Garantir();
-                Log.Info("Pulso iniciado");
+                Log.Info(inicio ? "Pulso iniciado pelo Windows" : "Pulso iniciado");
                 Config.Carregar();
                 EstadoSalvo.Carregar();
-                using (var app = new App()) Application.Run(app);
+                using (var app = new App(inicio)) Application.Run(app);
                 EstadoSalvo.Gravar(true);
                 Log.Info("Pulso encerrado");
             }
@@ -103,7 +104,7 @@ namespace Pulso
         Configuracoes config;
         public bool AtalhoAtivo { get; private set; }
 
-        public App()
+        public App(bool inicio)
         {
             SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
             Estado.Iniciar(SynchronizationContext.Current);
@@ -156,6 +157,9 @@ namespace Pulso
             AplicarAtalho();
             Integracao.IniciarComWindows(Config.Atual.IniciarComWindows);
 
+            // Aberto pelo Windows: em segundo plano, a cápsula só aparece pelo ícone da bandeja ou pelo atalho
+            // (sem nenhum dos dois não haveria como chamá-la, então abre como sempre)
+            if (inicio && Config.Atual.Mostrar != Mostrar.Oculto && (bandeja.Visivel || AtalhoAtivo)) Notch.OcultoPeloAtalho = true;
             Notch.Show();
             lock (Estado.Trava)
             {
