@@ -32,6 +32,16 @@ namespace Pulso
                 Mensagens.Enviar(3, System.IO.Path.GetFullPath(args[1]));
                 return;
             }
+            // Diagnóstico: notch e cartões em PNG em várias escalas, sem abrir o app (só lê a config e o estado)
+            if (args.Length > 1 && args[0] == "--bancada")
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Config.Carregar();
+                EstadoSalvo.Carregar();
+                NotchJanela.Bancada(System.IO.Path.GetFullPath(args[1]), args.Length > 2 ? args[2] : "1x0.8,1x1,1x1.25,1.25x0.8,1.25x1,1.25x1.25,1.5x0.8,1.5x1,1.5x1.25");
+                return;
+            }
             // Instalação (instalar.cmd / atualizar.cmd / desinstalar.cmd)
             if (args.Length > 0 && args[0] == "--sair")
             {

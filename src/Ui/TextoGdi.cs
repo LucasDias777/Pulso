@@ -40,10 +40,18 @@ namespace Pulso
             return (int)Math.Ceiling(DWrite.Largura(d, f.Size, texto));
         }
 
-        // Altura da linha: a mesma que o GDI mede para a fonte, para o cartão manter o layout em todo tamanho
+        // Altura da linha pelas métricas do DirectWrite (ascendente + descendente, o "line-height: normal" do navegador).
+        // A medida do GDI dependia do DPI do monitor principal e, com ele a 100%, cortava cedilha e descendentes.
         static int AlturaLinha(DWrite.Fonte d, Font f)
         {
-            return MedirGdi("Ag", f).Height;
+            return (int)Math.Ceiling((d.Ascent + d.Descent) * f.Size / d.Upm);
+        }
+
+        // Onde o DWrite.Desenhar põe a linha de base, a partir do topo da linha
+        static int BaseNaLinha(DWrite.Fonte d, Font f)
+        {
+            float k = f.Size / d.Upm;
+            return (int)Math.Round((AlturaLinha(d, f) - (d.Ascent + d.Descent) * k) / 2 + d.Ascent * k);
         }
 
         public static Size Medir(string texto, Font f)
@@ -68,7 +76,7 @@ namespace Pulso
         {
             if (string.IsNullOrEmpty(texto)) return;
             fundo = Color.FromArgb(255, fundo); cor = Color.FromArgb(255, cor);
-            string chave = "C\u0001" + texto + "\u0001" + f.Name + f.Size + (int)f.Style + "|" + cor.ToArgb() + "|" + fundo.ToArgb();
+            string chave = "C\u0001" + texto + "\u0001" + f.Name + f.Size + (int)f.Style + "|" + cor.ToArgb() + "|" + fundo.ToArgb() + "|" + DWrite.Assinatura;
             Pronto p;
             if (!cache.TryGetValue(chave, out p))
             {
@@ -164,8 +172,9 @@ namespace Pulso
             }
         }
 
-        // Uma linha dentro de um retângulo, à esquerda ou à direita, centrada na vertical, com reticências se faltar espaço
-        public static void Linha(Graphics g, string texto, Font f, Color cor, Color fundo, RectangleF ret, bool direita)
+        // Uma linha dentro de um retângulo, à esquerda ou à direita, centrada na vertical, com reticências se faltar espaço.
+        // baseDe: fica na linha de base que essa outra fonte teria no mesmo retângulo (texto menor ao lado de um rótulo)
+        public static void Linha(Graphics g, string texto, Font f, Color cor, Color fundo, RectangleF ret, bool direita, Font baseDe = null)
         {
             if (string.IsNullOrEmpty(texto) || ret.Width < 2) return;
             var d = Dw(f, texto);
@@ -180,11 +189,15 @@ namespace Pulso
             int w = Math.Min(lw + 1, max);
             int x = direita ? (int)Math.Floor(ret.Right) - w : (int)Math.Round(ret.Left);
             int y = (int)Math.Round(ret.Top + (ret.Height - h) / 2);
+            var db = baseDe != null ? Dw(baseDe, "A") : null;
+            if (db != null) y = (int)Math.Round(ret.Top + (ret.Height - AlturaLinha(db, baseDe)) / 2) + BaseNaLinha(db, baseDe) - BaseNaLinha(d, f);
             // À esquerda o texto começa na borda do retângulo; à direita, termina nela
-            Colar(g, d, f, new List<string> { texto }, direita ? w - lw : 0, cor, fundo, new Rectangle(x, y, w, h));
+            Colar(g, d, f, new List<string> { texto }, direita ? w - lw : 0, h, cor, fundo, new Rectangle(x, y, w, h));
         }
 
-        public static int Paragrafo(Graphics g, string texto, Font f, Color cor, Color fundo, float x, float y, float largura)
+        // entrelinha > 0: altura de cada linha em pixels (o line-height do CSS); 0 = a da fonte.
+        // O caminho de reserva pelo GDI fica com a entrelinha dele.
+        public static int Paragrafo(Graphics g, string texto, Font f, Color cor, Color fundo, float x, float y, float largura, float entrelinha = 0)
         {
             int w = (int)Math.Floor(largura);
             var d = string.IsNullOrEmpty(texto) ? null : Dw(f, texto);
@@ -195,22 +208,22 @@ namespace Pulso
                 return hg;
             }
             var linhas = DWrite.Quebrar(d, f.Size, texto.Replace("\r", ""), w);
-            int h = linhas.Count * AlturaLinha(d, f);
-            if (g != null) Colar(g, d, f, linhas, 0, cor, fundo, new Rectangle((int)Math.Round(x), (int)Math.Round(y), w, h));
+            int alt = entrelinha > 0 ? Math.Max(AlturaLinha(d, f), (int)Math.Round(entrelinha, MidpointRounding.AwayFromZero)) : AlturaLinha(d, f);
+            int h = linhas.Count * alt;
+            if (g != null) Colar(g, d, f, linhas, 0, alt, cor, fundo, new Rectangle((int)Math.Round(x), (int)Math.Round(y), w, h));
             return h;
         }
 
-        // Bitmap do tamanho de r, opaco com a cor do fundo, com uma linha do DirectWrite a cada altura de linha
+        // Bitmap do tamanho de r, opaco com a cor do fundo, com uma linha do DirectWrite a cada 'alt' pixels
         // (o texto começa em xTexto); fica no cache e é colado alinhado ao pixel
-        static void Colar(Graphics g, DWrite.Fonte d, Font f, List<string> linhas, int xTexto, Color cor, Color fundo, Rectangle r)
+        static void Colar(Graphics g, DWrite.Fonte d, Font f, List<string> linhas, int xTexto, int alt, Color cor, Color fundo, Rectangle r)
         {
             if (r.Width <= 0 || r.Height <= 0) return;
             fundo = Color.FromArgb(255, fundo); cor = Color.FromArgb(255, cor);
-            string chave = "D\u0001" + string.Join("\n", linhas) + "\u0001" + f.Name + f.Size + (int)f.Style + "\u0001" + cor.ToArgb() + "|" + fundo.ToArgb() + "|" + r.Width + "x" + r.Height + "|" + xTexto;
+            string chave = "D\u0001" + string.Join("\n", linhas) + "\u0001" + f.Name + f.Size + (int)f.Style + "\u0001" + cor.ToArgb() + "|" + fundo.ToArgb() + "|" + r.Width + "x" + r.Height + "|" + xTexto + "|" + alt + "|" + DWrite.Assinatura;
             Pronto p;
             if (!cache.TryGetValue(chave, out p))
             {
-                int alt = AlturaLinha(d, f);
                 var bmp = new Bitmap(r.Width, r.Height, PixelFormat.Format24bppRgb);
                 using (var gt = Graphics.FromImage(bmp))
                 {

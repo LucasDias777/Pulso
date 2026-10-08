@@ -61,7 +61,7 @@ namespace Pulso
                 texto = texto.TrimEnd() + "…";
             }
             fundo = Color.FromArgb(255, fundo); cor = Color.FromArgb(255, cor);
-            string chave = e.Familia + e.Peso + "|" + e.Em + "|" + e.Linha + "|" + cor.ToArgb() + "|" + fundo.ToArgb() + "|" + texto;
+            string chave = e.Familia + e.Peso + "|" + e.Em + "|" + e.Linha + "|" + cor.ToArgb() + "|" + fundo.ToArgb() + "|" + DWrite.Assinatura + "|" + texto;
             Bitmap b;
             if (!cache.TryGetValue(chave, out b))
             {

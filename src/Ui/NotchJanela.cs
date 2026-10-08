@@ -27,6 +27,7 @@ namespace Pulso
 
         // Geometria (pixels físicos da tela)
         float s = 1;
+        float sCartao = 1;             // cartões: escala do monitor × tamanho, mas nunca menor que no Médio
         Rectangle area, monitor;
         Borda borda;
         List<string> slots = new List<string>();
@@ -49,7 +50,7 @@ namespace Pulso
         DateTime animInicio; float animDe, animPara; bool animando;
         readonly Dictionary<string, DateTime> girando = new Dictionary<string, DateTime>();
         public bool OcultoPeloAtalho;
-        public float Escala { get { return s; } }
+        public float EscalaCartao { get { return sCartao; } }
         public Borda BordaAtual { get { return borda; } }
         public RectangleF CorpoTela { get { return corpo; } }
         public Rectangle AreaTrabalho { get { return area; } }
@@ -208,11 +209,13 @@ namespace Pulso
             return Screen.PrimaryScreen;
         }
 
-        static float EscalaDe(Screen sc)
+        static IntPtr HMonitor(Screen sc)
         {
             var c = new Nativo.PONTO(sc.Bounds.Left + sc.Bounds.Width / 2, sc.Bounds.Top + sc.Bounds.Height / 2);
-            return Nativo.EscalaDoMonitor(Nativo.MonitorFromPoint(c, Nativo.MONITOR_DEFAULTTONEAREST));
+            return Nativo.MonitorFromPoint(c, Nativo.MONITOR_DEFAULTTONEAREST);
         }
+
+        static float EscalaDe(Screen sc) { return Nativo.EscalaDoMonitor(HMonitor(sc)); }
 
         bool Vertical { get { return borda == Borda.Direita || borda == Borda.Esquerda; } }
 
@@ -222,9 +225,14 @@ namespace Pulso
             var sc = MonitorAlvo();
             area = sc.WorkingArea;
             monitor = sc.Bounds;
-            float novaEscala = EscalaDe(sc) * (float)cfg.Tamanho;
-            if (Math.Abs(novaEscala - s) > 0.001f) { foreach (var f in fontes.Values) f.Dispose(); fontes.Clear(); }
+            DWrite.Monitor = HMonitor(sc); // o ClearType e a gamma do texto são os deste monitor
+            float esc = monitorFixo > 0 ? monitorFixo : EscalaDe(sc), tam = tamanhoFixo > 0 ? tamanhoFixo : (float)cfg.Tamanho;
+            float novaEscala = esc * tam;
+            // O cartão é texto para ler: não encolhe com o notch Pequeno (só pílula e anéis encolhem), mas cresce no Grande
+            float novaCartao = esc * Math.Max(1, tam);
+            if (Math.Abs(novaEscala - s) > 0.001f || Math.Abs(novaCartao - sCartao) > 0.001f) { foreach (var f in fontes.Values) f.Dispose(); fontes.Clear(); }
             s = novaEscala;
+            sCartao = novaCartao;
             borda = cfg.Borda;
             slots = SlotsDesejados();
             int n = Math.Max(1, slots.Count);
@@ -331,14 +339,16 @@ namespace Pulso
 
         // ---------- Desenho ----------
 
-        Font Fonte(float px, bool forte, bool seminegrito = false)
+        // Chave pelo tamanho já em pixels: o notch (s) e o cartão (sCartao) têm escalas próprias
+        Font Fonte(float px, float escala, bool forte, bool seminegrito = false)
         {
+            px *= escala;
             string chave = px + (forte ? "b" : "") + (seminegrito ? "s" : "");
             Font f;
             if (!fontes.TryGetValue(chave, out f))
             {
-                f = seminegrito ? new Font("Segoe UI Semibold", px * s, FontStyle.Regular, GraphicsUnit.Pixel)
-                                : new Font("Segoe UI", px * s, forte ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
+                f = seminegrito ? new Font("Segoe UI Semibold", px, FontStyle.Regular, GraphicsUnit.Pixel)
+                                : new Font("Segoe UI", px, forte ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
                 fontes[chave] = f;
             }
             return f;
@@ -363,6 +373,31 @@ namespace Pulso
             }
             catch (Exception e) { Log.Erro("captura", e); }
             finally { slotCartao = slotAntes; dentro = dentroAntes; expansao = expAntes; Renderizar(); }
+        }
+
+        // Bancada (--bancada): as mesmas capturas em combinações de escala do monitor × tamanho do notch
+        // ("1.25x0.8"), uma pasta por combinação, sem abrir o app nem mostrar janela
+        static bool soCaptura;
+        float monitorFixo, tamanhoFixo;
+
+        public static void Bancada(string pasta, string combinacoes)
+        {
+            soCaptura = true;
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            // Uma sessão de exemplo, para o cartão ter também a linha de sessão
+            lock (Estado.Trava) Estado.Pegar("claude").Sessoes["bancada"] = new Sessao { Id = "1a4a", Pasta = "Website", Estado = Atividade.Trabalhando, Ultima = DateTime.UtcNow };
+            using (var n = new NotchJanela())
+            {
+                var h = n.Handle;
+                foreach (var comb in combinacoes.Split(','))
+                {
+                    var partes = comb.Split('x');
+                    n.monitorFixo = float.Parse(partes[0], ci);
+                    n.tamanhoFixo = float.Parse(partes[1], ci);
+                    n.Reposicionar();
+                    n.Capturar(System.IO.Path.Combine(pasta, "m" + partes[0] + "-t" + partes[1]));
+                }
+            }
         }
 
         public void Renderizar() { Renderizar(true); }
@@ -420,7 +455,7 @@ namespace Pulso
                 if (aberto) DesenharAberto(g, pal, provs, mostrarCartao);
                 else DesenharRecolhido(g, pal);
             }
-            if (!mostrar) return;
+            if (!mostrar || soCaptura) return;
             janela = jan;
             sup.Mostrar(Handle, jan.X, jan.Y);
             if (!Visible) { Show(); Nativo.SetWindowPos(Handle, Nativo.HWND_TOPMOST, 0, 0, 0, 0, Nativo.SWP_NOMOVE | Nativo.SWP_NOSIZE | Nativo.SWP_NOACTIVATE); }
@@ -609,7 +644,7 @@ namespace Pulso
             if (principal != null) txt = principal.Contagem.HasValue ? "~" + principal.Contagem.Value : Texto.Pct(principal.Atual, comEstimativa);
             else txt = p.Erro != null || p.Janelas.Count > 0 ? "—" : "…";
             // Segoe UI 15 px, peso 600, dígitos tabulares
-            TextoGdi.Centro(g, txt, Fonte(15, false, true), pal.Tinta, pal.Pilula, new PointF(c.X, c.Y + 38 * s), alfa);
+            TextoGdi.Centro(g, txt, Fonte(15, s, false, true), pal.Tinta, pal.Pilula, new PointF(c.X, c.Y + 38 * s), alfa);
         }
 
         void DesenharOrbe(Graphics g, Paleta pal)
@@ -688,9 +723,10 @@ namespace Pulso
 
         RectangleF PosicionarCartao(Graphics med, Provedor p, PointF c)
         {
-            float w = LarguraCartao * s;
-            float h = Conteudo(med, null, Paleta.Atual, p, 0, 0, w - 2 * Pad * s) + 2 * Pad * s;
-            float m = 8 * s, folga = (10.5f + 28.2f) * s;
+            float w = LarguraCartao * sCartao;
+            float h = Conteudo(med, null, Paleta.Atual, p, 0, 0, w - 2 * Pad * sCartao) + 2 * Pad * sCartao;
+            // A ponta da cauda (28,2, do cartão) para a 10,5 da pílula (do notch)
+            float m = 8 * sCartao, folga = 10.5f * s + 28.2f * sCartao;
             float x, y;
             switch (borda)
             {
@@ -710,16 +746,16 @@ namespace Pulso
             var r = cartaoRet;
             using (var b = new SolidBrush(pal.Cartao))
             {
-                using (var forma = Arredondado(r, 16 * s)) g.FillPath(b, forma);
+                using (var forma = Arredondado(r, 16 * sCartao)) g.FillPath(b, forma);
                 using (var cauda = Cauda(r, c)) g.FillPath(b, cauda);
             }
-            Conteudo(g, g, pal, p, r.Left + Pad * s, r.Top + Pad * s, r.Width - 2 * Pad * s);
+            Conteudo(g, g, pal, p, r.Left + Pad * sCartao, r.Top + Pad * sCartao, r.Width - 2 * Pad * sCartao);
         }
 
         // Cauda do cartão apontando para o anel (base 32,72, comprimento 28,2)
         GraphicsPath Cauda(RectangleF r, PointF alvo)
         {
-            float meio = 16.36f * s, lim = 16 * s + meio;
+            float meio = 16.36f * sCartao, lim = 16 * sCartao + meio;
             PointF baseP; PointF dir, perp;
             switch (borda)
             {
@@ -729,8 +765,8 @@ namespace Pulso
                 default: baseP = new PointF(Math.Max(r.Left + lim, Math.Min(r.Right - lim, alvo.X)), r.Bottom - 1); dir = new PointF(0, 1); perp = new PointF(1, 0); break;
             }
             Func<float, float, PointF> P = (u, v) => new PointF(
-                baseP.X + dir.X * (u * s + (u == 0 ? 0 : 1)) + perp.X * (v - 16.36f) * s,
-                baseP.Y + dir.Y * (u * s + (u == 0 ? 0 : 1)) + perp.Y * (v - 16.36f) * s);
+                baseP.X + dir.X * (u * sCartao + (u == 0 ? 0 : 1)) + perp.X * (v - 16.36f) * sCartao,
+                baseP.Y + dir.Y * (u * sCartao + (u == 0 ? 0 : 1)) + perp.Y * (v - 16.36f) * sCartao);
             var p = new GraphicsPath();
             p.AddBezier(P(0, 0), P(0, 8.18f), P(16.36f, 12.43f), P(28.2f, 16.36f));
             p.AddBezier(P(28.2f, 16.36f), P(16.36f, 20.29f), P(0, 24.54f), P(0, 32.72f));
@@ -757,25 +793,29 @@ namespace Pulso
         {
             float y0 = y;
             fundoTexto = pal.Cartao;
-            var fTitulo = Fonte(14, true);
-            var fRotulo = Fonte(12, false, true);
-            var fPeq = Fonte(11, false);
+            var fTitulo = Fonte(14, sCartao, true);
+            var fRotulo = Fonte(12, sCartao, false, true);
+            var fPeq = Fonte(11, sCartao, false);
+            // Como o Codenotch: nota em 12 px com entrelinha de 1,5 (.c-note) e título de grupo em 12 px negrito (.g-head)
+            var fNota = Fonte(12, sCartao, false);
+            var fGrupo = Fonte(12, sCartao, true);
+            float hNota = 18 * sCartao;
 
             // Cabeçalho: ícone + "Claude" + plano à direita
-            float hTit = 20 * s;
+            float hTit = 20 * sCartao;
             if (g != null)
             {
-                using (var ic = Glifos.Caminho(p.Id, x + 8 * s, y + hTit / 2, 16 * s))
+                using (var ic = Glifos.Caminho(p.Id, x + 8 * sCartao, y + hTit / 2, 16 * sCartao))
                 using (var b = new SolidBrush(pal.Tinta2)) g.FillPath(b, ic);
-                Escrever(g, p.Nome, fTitulo, pal.Tinta, x + 24 * s, y, w - 24 * s, hTit, StringAlignment.Near);
-                if (p.Plano != null) Escrever(g, p.Plano, fPeq, pal.TintaFraca, x, y, w, hTit, StringAlignment.Far);
+                Escrever(g, p.Nome, fTitulo, pal.Tinta, x + 24 * sCartao, y, w - 24 * sCartao, hTit, StringAlignment.Near);
+                if (p.Plano != null) Escrever(g, p.Plano, fPeq, pal.TintaFraca, x, y, w, hTit, StringAlignment.Far, fTitulo);
             }
-            y += hTit + 4 * s;
+            y += hTit + 4 * sCartao;
 
             if (p.Janelas.Count == 0)
             {
                 string msg = !p.Presente ? Util.Maiuscula(p.Ausencia) : p.Erro ?? p.Detalhe ?? (p.Id == "codex" ? "Use o Codex uma vez para aparecer o consumo." : "Aguardando a primeira leitura…");
-                y += Paragrafo(med, g, msg, fPeq, pal.Tinta3, x, y + 6 * s, w) + 6 * s;
+                y += Paragrafo(med, g, msg, fNota, pal.Tinta3, x, y + 6 * sCartao, w, hNota) + 6 * sCartao;
             }
 
             string grupoAnterior = null;
@@ -784,22 +824,22 @@ namespace Pulso
                 // Grupos (Antigravity: Modelos Gemini / Modelos Claude e GPT)
                 if (j.Grupo != null && j.Grupo != grupoAnterior)
                 {
-                    y += 12 * s;
-                    if (g != null) Escrever(g, j.Grupo, fTitulo, pal.Tinta, x, y, w, 18 * s, StringAlignment.Near);
-                    y += 18 * s;
+                    y += 12 * sCartao;
+                    if (g != null) Escrever(g, j.Grupo, fGrupo, pal.Tinta2, x, y, w, 16 * sCartao, StringAlignment.Near);
+                    y += 16 * sCartao;
                     grupoAnterior = j.Grupo;
                 }
-                y += 10 * s;
-                float hl = 16 * s;
+                y += 10 * sCartao;
+                float hl = 16 * sCartao;
                 if (j.Contagem.HasValue)
                 {
                     // Janela só de contagem: sem barra, sem limite publicado
                     if (g != null)
                     {
                         Escrever(g, j.Rotulo, fRotulo, pal.Tinta2, x, y, w, hl, StringAlignment.Near);
-                        Escrever(g, j.Contagem.Value == 0 ? "nenhuma requisição hoje" : "~" + j.Contagem.Value + (j.Contagem.Value == 1 ? " requisição hoje" : " requisições hoje"), fPeq, pal.TintaFraca, x, y + hl + 4 * s, w, 15 * s, StringAlignment.Near);
+                        Escrever(g, j.Contagem.Value == 0 ? "nenhuma requisição hoje" : "~" + j.Contagem.Value + (j.Contagem.Value == 1 ? " requisição hoje" : " requisições hoje"), fPeq, pal.TintaFraca, x, y + hl + 4 * sCartao, w, 15 * sCartao, StringAlignment.Near);
                     }
-                    y += hl + 4 * s + 15 * s;
+                    y += hl + 4 * sCartao + 15 * sCartao;
                     continue;
                 }
                 if (g != null)
@@ -807,39 +847,39 @@ namespace Pulso
                     string rit = j.Id == "daily_pace" ? null : Ritmo.Texto(j);
                     var pts = Ritmo.Pontos(j);
                     float writ = rit != null ? TextoGdi.Medir(rit, fPeq).Width + 1 : 0;
-                    if (rit != null && TextoGdi.Medir(j.Rotulo, fRotulo).Width + writ + 10 * s > w) { rit = null; writ = 0; }
-                    Escrever(g, j.Rotulo, fRotulo, pal.Tinta2, x, y, w - (writ > 0 ? writ + 10 * s : 0), hl, StringAlignment.Near);
-                    if (rit != null) Escrever(g, rit, fPeq, pts > 0 ? pal.Atencao : pal.TintaFraca, x + w - writ, y, writ, hl, StringAlignment.Far);
+                    if (rit != null && TextoGdi.Medir(j.Rotulo, fRotulo).Width + writ + 10 * sCartao > w) { rit = null; writ = 0; }
+                    Escrever(g, j.Rotulo, fRotulo, pal.Tinta2, x, y, w - (writ > 0 ? writ + 10 * sCartao : 0), hl, StringAlignment.Near);
+                    if (rit != null) Escrever(g, rit, fPeq, pts > 0 ? pal.Atencao : pal.TintaFraca, x + w - writ, y, writ, hl, StringAlignment.Far, fRotulo);
                 }
-                y += hl + 6 * s;
+                y += hl + 6 * sCartao;
                 if (g != null)
                 {
-                    float hb = 4 * s;
+                    float hb = 4 * sCartao;
                     using (var b = new SolidBrush(pal.Barra))
-                    using (var trilho = Arredondado(new RectangleF(x, y, w, hb), 2 * s)) g.FillPath(b, trilho);
+                    using (var trilho = Arredondado(new RectangleF(x, y, w, hb), 2 * sCartao)) g.FillPath(b, trilho);
                     double conf = Math.Min(1, j.Usado), atual = Math.Min(1, j.Atual);
                     if (atual > conf + 0.002)
                         using (var b = new SolidBrush(Paleta.Alfa(pal.Tom(atual), 0.45)))
-                        using (var est = Arredondado(new RectangleF(x, y, (float)Math.Max(hb, w * atual), hb), 2 * s)) g.FillPath(b, est);
+                        using (var est = Arredondado(new RectangleF(x, y, (float)Math.Max(hb, w * atual), hb), 2 * sCartao)) g.FillPath(b, est);
                     if (conf > 0)
                         using (var b = new SolidBrush(pal.Tom(atual)))
-                        using (var cheio = Arredondado(new RectangleF(x, y, (float)Math.Max(hb, w * conf), hb), 2 * s)) g.FillPath(b, cheio);
+                        using (var cheio = Arredondado(new RectangleF(x, y, (float)Math.Max(hb, w * conf), hb), 2 * sCartao)) g.FillPath(b, cheio);
                     // Onde você "deveria" estar pelo tempo já passado da janela
                     var dec = j.Id == "daily_pace" ? null : Ritmo.Decorrido(j);
                     if (dec.HasValue)
-                        using (var b = new SolidBrush(pal.Tinta3)) g.FillRectangle(b, x + (float)(w * dec.Value) - 1 * s, y - 2 * s, 2 * s, hb + 4 * s);
+                        using (var b = new SolidBrush(pal.Tinta3)) g.FillRectangle(b, x + (float)(w * dec.Value) - 1 * sCartao, y - 2 * sCartao, 2 * sCartao, hb + 4 * sCartao);
                 }
-                y += 4 * s + 4 * s;
+                y += 4 * sCartao + 4 * sCartao;
                 // Embaixo da barra: uso à esquerda, renovação à direita (sem "restante" se não couber)
-                float hs = 15 * s;
+                float hs = 15 * sCartao;
                 bool est2 = j.Estimado.HasValue && j.Estimado.Value > j.Usado + 0.004;
                 if (g != null)
                 {
                     string rn = Texto.Renova(j.ResetaEm);
                     float wr = rn != null ? TextoGdi.Medir(rn, fPeq).Width + 1 : 0;
                     string uso = Texto.UsadoRestante(j.Atual, est2);
-                    if (TextoGdi.Medir(uso, fPeq).Width + wr + 8 * s > w) uso = Texto.Pct(j.Atual, est2) + " usado";
-                    Escrever(g, uso, fPeq, pal.TintaFraca, x, y, w - wr - 8 * s, hs, StringAlignment.Near);
+                    if (TextoGdi.Medir(uso, fPeq).Width + wr + 8 * sCartao > w) uso = Texto.Pct(j.Atual, est2) + " usado";
+                    Escrever(g, uso, fPeq, pal.TintaFraca, x, y, w - wr - 8 * sCartao, hs, StringAlignment.Near);
                     if (rn != null) Escrever(g, rn, fPeq, pal.TintaFraca, x + w - wr, y, wr, hs, StringAlignment.Far);
                 }
                 y += hs;
@@ -847,12 +887,12 @@ namespace Pulso
 
             // Ritmo e projeção
             string ritmo = Texto.Ritmo(p.RitmoHora, p.Principal);
-            if (ritmo != null) { y += 8 * s; y += Paragrafo(med, g, ritmo, fPeq, pal.Tinta4, x, y, w); }
+            if (ritmo != null) { y += 8 * sCartao; y += Paragrafo(med, g, ritmo, fPeq, pal.Tinta4, x, y, w); }
 
-            if (p.Detalhe != null && p.Janelas.Count > 0) { y += 8 * s; y += Paragrafo(med, g, p.Detalhe, fPeq, pal.Tinta3, x, y, w); }
+            if (p.Detalhe != null && p.Janelas.Count > 0) { y += 8 * sCartao; y += Paragrafo(med, g, p.Detalhe, fNota, pal.Tinta3, x, y, w, hNota); }
             string frescor = Texto.Frescor(p);
-            if (frescor != null) { y += 8 * s; y += Paragrafo(med, g, frescor, fPeq, pal.TintaFraca, x, y, w); }
-            if (p.Nota != null && p.Janelas.Count > 0) { y += 4 * s; y += Paragrafo(med, g, p.Nota, fPeq, pal.Tinta3, x, y, w); }
+            if (frescor != null) { y += 8 * sCartao; y += Paragrafo(med, g, frescor, fPeq, pal.TintaFraca, x, y, w); }
+            if (p.Nota != null && p.Janelas.Count > 0) { y += 4 * sCartao; y += Paragrafo(med, g, p.Nota, fNota, pal.Tinta3, x, y, w, hNota); }
 
             // De onde veio o uso da sessão de 5h (só o deste computador)
             var indice = Projetos.De(p.Id);
@@ -864,29 +904,29 @@ namespace Pulso
                     parcelas = parcelas.Take(3).Concat(new[] { new KeyValuePair<string, double>("Outros", parcelas.Skip(3).Sum(kv => kv.Value)) }).ToList();
                 if (parcelas.Count > 0)
                 {
-                    y += 12 * s;
-                    if (g != null) using (var pen = new Pen(pal.CartaoRegra, 1 * s)) g.DrawLine(pen, x, y, x + w, y);
-                    y += 8 * s;
-                    if (g != null) Escrever(g, "Por projeto nesta sessão", fRotulo, pal.Tinta2, x, y, w, 16 * s, StringAlignment.Near);
-                    y += 16 * s + 2 * s;
+                    y += 12 * sCartao;
+                    if (g != null) using (var pen = new Pen(pal.CartaoRegra, 1 * sCartao)) g.DrawLine(pen, x, y, x + w, y);
+                    y += 8 * sCartao;
+                    if (g != null) Escrever(g, "Por projeto nesta sessão", fRotulo, pal.Tinta2, x, y, w, 16 * sCartao, StringAlignment.Near);
+                    y += 16 * sCartao + 2 * sCartao;
                     foreach (var kv in parcelas)
                     {
-                        float hlin = 16 * s;
+                        float hlin = 16 * sCartao;
                         if (g != null)
                         {
                             string pct = kv.Value < 0.005 ? "<1%" : Math.Round(kv.Value * 100) + "%";
-                            float wp = TextoGdi.Medir("100%", fPeq).Width + 2 * s;
-                            Escrever(g, kv.Key, fPeq, pal.Tinta4, x, y, w - wp - 8 * s, hlin, StringAlignment.Near);
+                            float wp = TextoGdi.Medir("100%", fPeq).Width + 2 * sCartao;
+                            Escrever(g, kv.Key, fPeq, pal.Tinta4, x, y, w - wp - 8 * sCartao, hlin, StringAlignment.Near);
                             Escrever(g, pct, fPeq, pal.TintaFraca, x + w - wp, y, wp, hlin, StringAlignment.Far);
-                            float hb = 3 * s, yb = y + hlin + 1 * s;
+                            float hb = 3 * sCartao, yb = y + hlin + 1 * sCartao;
                             using (var b = new SolidBrush(pal.Barra))
-                            using (var trilho = Arredondado(new RectangleF(x, yb, w, hb), 1.5f * s)) g.FillPath(b, trilho);
+                            using (var trilho = Arredondado(new RectangleF(x, yb, w, hb), 1.5f * sCartao)) g.FillPath(b, trilho);
                             using (var b = new SolidBrush(pal.Tinta3))
-                            using (var cheio = Arredondado(new RectangleF(x, yb, (float)Math.Max(hb, w * kv.Value), hb), 1.5f * s)) g.FillPath(b, cheio);
+                            using (var cheio = Arredondado(new RectangleF(x, yb, (float)Math.Max(hb, w * kv.Value), hb), 1.5f * sCartao)) g.FillPath(b, cheio);
                         }
-                        y += hlin + 1 * s + 3 * s + 5 * s;
+                        y += hlin + 1 * sCartao + 3 * sCartao + 5 * sCartao;
                     }
-                    y -= 5 * s;
+                    y -= 5 * sCartao;
                 }
             }
 
@@ -896,45 +936,45 @@ namespace Pulso
                 .ThenByDescending(v => v.Ultima).ToList();
             if (sessoes.Count > 0)
             {
-                y += 12 * s;
-                if (g != null) using (var pen = new Pen(pal.CartaoRegra, 1 * s)) g.DrawLine(pen, x, y, x + w, y);
-                y += 8 * s;
+                y += 12 * sCartao;
+                if (g != null) using (var pen = new Pen(pal.CartaoRegra, 1 * sCartao)) g.DrawLine(pen, x, y, x + w, y);
+                y += 8 * sCartao;
                 int mostradas = Math.Min(5, sessoes.Count);
                 for (int i = 0; i < mostradas; i++)
                 {
                     var se = sessoes[i];
-                    float hlin = 17 * s;
+                    float hlin = 17 * sCartao;
                     if (g != null)
                     {
                         Color cor = se.Estado == Atividade.Trabalhando ? pal.Tinta : se.Estado == Atividade.Aguardando ? pal.Atencao : pal.Folga;
-                        float d = 6 * s;
+                        float d = 6 * sCartao;
                         using (var b = new SolidBrush(cor)) g.FillEllipse(b, x, y + (hlin - d) / 2, d, d);
                         string est = Texto.Estado(se.Estado);
-                        float we = TextoGdi.Medir(est, fPeq).Width + 8 * s;
-                        Escrever(g, se.Titulo, fPeq, pal.Tinta4, x + 12 * s, y, w - 12 * s - we, hlin, StringAlignment.Near);
+                        float we = TextoGdi.Medir(est, fPeq).Width + 8 * sCartao;
+                        Escrever(g, se.Titulo, fPeq, pal.Tinta4, x + 12 * sCartao, y, w - 12 * sCartao - we, hlin, StringAlignment.Near);
                         Escrever(g, est, fPeq, pal.TintaFraca, x + w - we, y, we, hlin, StringAlignment.Far);
-                        linhasSessao.Add(new KeyValuePair<RectangleF, Sessao>(new RectangleF(x - 4 * s, y, w + 8 * s, hlin), se));
+                        linhasSessao.Add(new KeyValuePair<RectangleF, Sessao>(new RectangleF(x - 4 * sCartao, y, w + 8 * sCartao, hlin), se));
                     }
                     y += hlin;
                 }
                 if (sessoes.Count > mostradas)
                 {
-                    float hlin = 16 * s;
-                    if (g != null) Escrever(g, "e mais " + (sessoes.Count - mostradas), fPeq, pal.TintaFraca, x + 12 * s, y, w, hlin, StringAlignment.Near);
+                    float hlin = 16 * sCartao;
+                    if (g != null) Escrever(g, "e mais " + (sessoes.Count - mostradas), fPeq, pal.TintaFraca, x + 12 * sCartao, y, w, hlin, StringAlignment.Near);
                     y += hlin;
                 }
             }
             return y - y0;
         }
 
-        float Paragrafo(Graphics med, Graphics g, string texto, Font f, Color cor, float x, float y, float w)
+        float Paragrafo(Graphics med, Graphics g, string texto, Font f, Color cor, float x, float y, float w, float entrelinha = 0)
         {
-            return TextoGdi.Paragrafo(g, texto, f, cor, fundoTexto, x, y, w);
+            return TextoGdi.Paragrafo(g, texto, f, cor, fundoTexto, x, y, w, entrelinha);
         }
 
-        void Escrever(Graphics g, string texto, Font f, Color cor, float x, float y, float w, float h, StringAlignment al)
+        void Escrever(Graphics g, string texto, Font f, Color cor, float x, float y, float w, float h, StringAlignment al, Font baseDe = null)
         {
-            TextoGdi.Linha(g, texto, f, cor, fundoTexto, new RectangleF(x, y, w, h), al == StringAlignment.Far);
+            TextoGdi.Linha(g, texto, f, cor, fundoTexto, new RectangleF(x, y, w, h), al == StringAlignment.Far, baseDe);
         }
 
         // ---------- Animação ----------

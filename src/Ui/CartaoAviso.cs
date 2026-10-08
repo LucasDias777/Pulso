@@ -101,7 +101,7 @@ namespace Pulso
         {
             if (atual == null || IsDisposed) return;
             if (!IsHandleCreated) CreateHandle();
-            float s = notch.Escala;
+            float s = notch.EscalaCartao; // como o cartão de consumo: não encolhe com o notch Pequeno
             var borda = notch.BordaAtual;
             bool preso = notch.Visible;
             float W = 280 * s, H = 150 * s;
@@ -175,9 +175,9 @@ namespace Pulso
                 using (var pen = new Pen(linha, Math.Max(1, s))) g.DrawPath(pen, p);
 
                 float px = cartaoLocal.X + 15 * s, py = cartaoLocal.Y + 13 * s;
-                var titulo = Tx.Novo("Segoe UI Variable Text", 700, 14 * s, 14 * 1.35f * s);
-                var sub = Tx.Novo("Segoe UI Variable Text", 400, 11 * s, 11 * 1.35f * s);
-                var st = Tx.Novo("Segoe UI Variable Text", 400, 12 * s, 12 * 1.35f * s);
+                var titulo = Tx.Novo("Segoe UI", 700, 14 * s, 14 * 1.35f * s);
+                var sub = Tx.Novo("Segoe UI", 400, 11 * s, 11 * 1.35f * s);
+                var st = Tx.Novo("Segoe UI", 400, 12 * s, 12 * 1.35f * s);
                 float hCab = titulo.Linha + (string.IsNullOrEmpty(atual.Subtitulo) ? 0 : sub.Linha);
                 using (var ic = Glifos.Caminho(atual.Provedor, px + 10.5f * s, py + hCab / 2, 21 * s))
                 using (var b = new SolidBrush(tinta)) g.FillPath(b, ic);

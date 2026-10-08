@@ -5,7 +5,7 @@
 <h1>Pulso</h1>
 
 <p>
-  <strong>O consumo do Claude Code e do Codex ao vivo, num notch na borda da tela do Windows.</strong>
+  <strong>O consumo do Claude Code e do Codex ao vivo, numa cápsula na borda da tela do Windows.</strong>
 </p>
 
 <p>
@@ -81,20 +81,20 @@
 | **Instala como um app** | Fica em Programas, no Menu Iniciar e em Configurações › Aplicativos do Windows, com Desinstalar; atualiza pelo próprio app |
 | **Três modos de exibição** | Sempre aberto; recolhido numa cápsula pequena que abre ao passar o cursor (com a opção de a cápsula mudar de cor conforme o fundo); ou oculto, só com o ícone na bandeja |
 | **Qualquer borda, qualquer monitor** | Direita, esquerda, superior ou inferior, em qualquer tela. Arrastável pelos pontinhos, pela engrenagem ou com Alt, ou fixo no meio da borda |
-| **Some em tela cheia** | Jogo, vídeo ou apresentação em tela cheia escondem o notch sozinhos, e ele volta ao sair. Janela maximizada não conta, mesmo com a barra de tarefas em ocultar automaticamente |
-| **Atalho global** | `Win + Y` mostra e oculta o notch de qualquer lugar; dá para gravar outra combinação |
+| **Some em tela cheia** | Jogo, vídeo ou apresentação em tela cheia escondem a cápsula sozinhos, e ela volta ao sair. Janela maximizada não conta, mesmo com a barra de tarefas em ocultar automaticamente |
+| **Atalho global** | `Win + Y` mostra e oculta a cápsula de qualquer lugar; dá para gravar outra combinação |
 | **Bandeja do sistema** | Ícone com um mini-anel e um menu com todas as leituras e horários de renovação |
 | **Inicia com o Windows** | Abre sozinho ao entrar no Windows e fica quieto em segundo plano |
 
 <div align="center">
-  <img src="docs/imagens/notch.png" alt="Notch na borda direita" width="150" />
+  <img src="docs/imagens/notch.png" alt="Cápsula na borda direita" width="150" />
   <br/>
-  <sub>O notch em repouso: um anel por provedor, com os arcos nas duas orelhas</sub>
+  <sub>A cápsula em repouso: um anel por provedor, com os arcos nas duas orelhas</sub>
 </div>
 
 ## Provedores suportados
 
-Claude e Codex vêm ligados. Os outros aparecem na aba **Contas** e só ganham anel quando você os ativa; um provedor que não está instalado no computador não ocupa espaço no notch.
+Claude e Codex vêm ligados. Os outros aparecem na aba **Contas** e só ganham anel quando você os ativa; um provedor que não está instalado no computador não ocupa espaço na cápsula.
 
 | Provedor | De onde vem o número |
 |---|---|
@@ -118,7 +118,7 @@ flowchart LR
             Sessoes["~/.claude/sessions<br/>sessões trabalhando ou esperando"]
             Credenciais["Logins já salvos pelas ferramentas<br/>lidos na hora, nunca gravados"]
         end
-        Pulso["Pulso.exe<br/>notch, bandeja e avisos"]
+        Pulso["Pulso.exe<br/>cápsula, bandeja e avisos"]
         Dados["%APPDATA%/Pulso<br/>config, estado, índice de custo e log"]
     end
 
@@ -161,8 +161,8 @@ O Pulso não usa nenhum pacote externo: tudo vem do próprio Windows e do .NET F
 | **C# 5** | Linguagem, compilada pelo `csc.exe` que já vem com o .NET Framework |
 | **.NET Framework 4.8** | Runtime (já instalado no Windows 10 1903+ e no Windows 11) |
 | **Windows Forms** | Janelas, ícone da bandeja e menus |
-| **GDI+** | Desenho do notch, dos anéis, dos cartões e das Configurações |
-| **DirectWrite** | Todo o texto do notch, dos cartões e das Configurações, desenhado como o Chromium: máscara ClearType de cada letra, modo pela tabela `gasp` da fonte, posição em 1/4 de pixel e a mistura do Skia (gamma sRGB). Nítido em qualquer tamanho e monitor, igual no Windows 10 e no 11 |
+| **GDI+** | Desenho da cápsula, dos anéis, dos cartões e das Configurações |
+| **DirectWrite** | Todo o texto da cápsula, dos cartões e das Configurações, desenhado como o Chromium (máscara ClearType de cada letra, modo pela tabela `gasp` da fonte, posição em 1/4 de pixel) e misturado com o fundo como o texto do próprio Windows, com a gamma, o contraste e o ClearType de cada monitor. Nítido em qualquer tamanho e monitor, igual no Windows 10 e no 11 |
 | **Win32** | Janela transparente por pixel (`UpdateLayeredWindow`), atalho global (`RegisterHotKey`), gravação do atalho (gancho de teclado), detecção de tela cheia (`SetWinEventHook`) e DPI por monitor |
 | **winsqlite3.dll** | SQLite nativo do Windows, para ler os bancos locais do Cursor e do OpenCode |
 | **WMI** | Localizar o servidor local do Antigravity |
@@ -191,14 +191,14 @@ Medido com o Pulso aberto, o Claude trabalhando e o indicador de atividade anima
 | Programa no disco | 296 KB |
 | Dados salvos | ~0,1 MB |
 
-O notch só redesenha quando algo muda: 60 quadros por segundo durante a animação de abrir, 10 por segundo com um agente trabalhando e nenhum quando está tudo parado.
+A cápsula só redesenha quando algo muda: 60 quadros por segundo durante a animação de abrir, 10 por segundo com um agente trabalhando e nenhum quando está tudo parado.
 
 ## Estrutura do projeto
 
 ```bash
 Pulso/
 ├── src/
-│   ├── App.cs                   # Ponto de entrada: instância única, liga fontes, notch, bandeja e avisos
+│   ├── App.cs                   # Ponto de entrada: instância única, liga fontes, cápsula, bandeja e avisos
 │   ├── Core/                    # Regras e infraestrutura
 │   │   ├── Config.cs            # Configurações (config.json)
 │   │   ├── Model.cs             # Provedor, janela de limite, sessão e o estado compartilhado
@@ -230,7 +230,7 @@ Pulso/
 │   │   ├── Antigravity.cs       # Antigravity
 │   │   └── Sqlite.cs            # Acesso ao winsqlite3.dll
 │   └── Ui/                      # Tudo o que aparece na tela
-│       ├── NotchJanela.cs       # O notch: anéis, cartão, animação, arrastar
+│       ├── NotchJanela.cs       # A cápsula: anéis, cartão, animação, arrastar
 │       ├── Configuracoes.cs     # Janela de Configurações, desenhada do zero
 │       ├── CartaoAviso.cs       # Cartão de aviso ao lado do anel
 │       ├── Bandeja.cs           # Ícone e menus da bandeja e do botão direito
@@ -296,7 +296,7 @@ Rodar o `instalar.cmd` de novo reinstala por cima, mantendo as configurações.
 O Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas, comparando a versão instalada com a do GitHub. Quando há uma nova, aparecem:
 
 - em **Configurações › Geral › Atualizações**, o botão **Atualizar agora** (e **Procurar atualização**, para conferir na hora);
-- na bandeja e no botão direito do notch, **Atualizar o Pulso (versão nova)**.
+- na bandeja e no botão direito da cápsula, **Atualizar o Pulso (versão nova)**.
 
 Atualizar abre uma janela que baixa a versão nova, compila, fecha o Pulso e abre o novo em alguns segundos; as configurações ficam. O mesmo pode ser feito com dois cliques no `atualizar.cmd` da pasta clonada.
 
@@ -321,9 +321,9 @@ A pasta clonada do projeto não é tocada; apague-a à mão se não for reinstal
 | Clicar num anel | Pede uma leitura nova (no Claude, respeitando o intervalo mínimo de 2 min) |
 | Clicar numa sessão no cartão | Traz a janela daquela sessão para a frente |
 | Passar o cursor na orelha de baixo e clicar na engrenagem | Abre as Configurações |
-| Arrastar os pontinhos ou a engrenagem, ou segurar Alt e arrastar o notch | Leva o notch para outra posição, borda ou monitor (com **Arrastável** ligado) |
-| Botão direito no notch | Atualizar, abrir a página de uso, manter aberto, mudar de borda, ocultar, Configurações e sair |
-| `Win + Y` | Mostra e oculta o notch |
+| Arrastar os pontinhos ou a engrenagem, ou segurar Alt e arrastar a cápsula | Leva a cápsula para outra posição, borda ou monitor (com **Arrastável** ligado) |
+| Botão direito na cápsula | Atualizar, abrir a página de uso, manter aberto, mudar de borda, ocultar, Configurações e sair |
+| `Win + Y` | Mostra e oculta a cápsula |
 | Abrir o Pulso pelo Menu Iniciar com ele já aberto | Abre as Configurações |
 
 ## Configurações
@@ -344,7 +344,7 @@ A pasta clonada do projeto não é tocada; apague-a à mão se não for reinstal
 | Aba | O que dá para ajustar |
 |---|---|
 | **Contas** | Quais provedores têm anel (um provedor ativado entra no fim da cápsula), a estimativa ao vivo do Claude e a barra de status do Claude Code. Mostra o plano e a origem da última leitura de cada um |
-| **Aparência** | Exibição (sempre, ao passar o cursor ou oculto), cápsula adaptável, tamanho, tema, anel semanal (dentro, fora ou tracejado), ritmo do dia no Claude, consumo por projeto no cartão, borda, monitor, arrastável e os limites de cor (atenção e crítico, em degrau ou rampa) |
+| **Aparência** | Exibição (sempre, ao passar o cursor ou oculto), cápsula adaptável, tamanho (o Pequeno encolhe só a cápsula e os anéis; o texto dos cartões fica como no Médio), tema, anel semanal (dentro, fora ou tracejado), ritmo do dia no Claude, consumo por projeto no cartão, borda, monitor, arrastável e os limites de cor (atenção e crítico, em degrau ou rampa) |
 | **Geral** | Abrir com o Windows, atalho global e gravação de uma combinação nova, cada tipo de aviso (inclusive o de ritmo), som, pré-visualização do cartão de aviso, atualizações, pasta de dados e desinstalar |
 
 ## Desenvolvimento
@@ -363,7 +363,8 @@ Para levar a mudança para a versão instalada, rode o `instalar.cmd`. O `build.
 | Comando | Uso |
 |---|---|
 | `Pulso.exe` | Abre o Pulso; se ele já estiver rodando, abre as Configurações |
-| `Pulso.exe --captura <pasta>` | Salva em PNG o notch, o cartão de cada provedor, a cápsula recolhida e as três abas das Configurações, sem mexer no que está na tela |
+| `Pulso.exe --captura <pasta>` | Salva em PNG a cápsula aberta, o cartão de cada provedor, a cápsula recolhida e as três abas das Configurações, sem mexer no que está na tela |
+| `Pulso.exe --bancada <pasta> [1x0.8,1.25x1,…]` | Sem abrir o app, salva em PNG a cápsula e os cartões em cada combinação de escala do monitor × tamanho (padrão: 100/125/150% × Pequeno/Médio/Grande), para conferir o texto em telas que não estão ligadas |
 | `Pulso.exe --previa` | Mostra um cartão de aviso de exemplo |
 | `Pulso.exe --gravar-teste` | Testa a gravação de um atalho novo e registra o resultado no log |
 | `Pulso.exe --statusline` | Usado pela barra de status do Claude Code, quando ligada nas Configurações |

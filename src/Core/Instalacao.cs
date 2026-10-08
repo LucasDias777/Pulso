@@ -115,7 +115,7 @@ namespace Pulso
         // --desinstalar (chamado pelo desinstalar.cmd, que apaga a pasta depois). 1 = cancelado.
         public static int Desinstalar()
         {
-            if (MessageBox.Show("Desinstalar o Pulso deste computador?\n\nO notch, o ícone da bandeja e o início com o Windows serão removidos.",
+            if (MessageBox.Show("Desinstalar o Pulso deste computador?\n\nA cápsula, o ícone da bandeja e o início com o Windows serão removidos.",
                     "Desinstalar o Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 1;
             FecharAberto();
             Integracao.IniciarComWindows(false);

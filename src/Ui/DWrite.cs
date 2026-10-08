@@ -6,20 +6,20 @@ using System.Runtime.InteropServices;
 
 namespace Pulso
 {
-    // Texto pelo DirectWrite com a receita do Chromium/Skia no Windows (o motor do Codenotch):
+    // Texto pelo DirectWrite, com o desenho do Chromium no Windows (o motor do Codenotch) e a mistura do próprio Windows:
     // - máscara de cobertura crua do DirectWrite, glifo a glifo (IDWriteGlyphRunAnalysis, textura ClearType 3x1);
     // - modo de renderização pela tabela gasp da fonte, como o SkScalerContext_DW (NATURAL ou NATURAL_SYMMETRIC),
     //   com o grid-fit padrão (= ligado);
-    // - posição horizontal em 1/4 de pixel (subpixel), linha de base no pixel inteiro;
-    // - mistura do Skia: tabela de pré-mistura com gamma sRGB e contraste 1,0 (SK_GAMMA_SRGB, SK_GAMMA_CONTRAST=1.0
-    //   do Chromium para Windows), máscara LCD 5-6-5 e blend_32.
-    // ClearType RGB/BGR conforme o sistema (como o Chromium); sem ClearType, ou com SemFranja, cinza tirado da própria
-    // máscara ClearType (média dos 3 subpixels), que é o que o Chromium faz quando não pode usar LCD.
-    // Só usa APIs do Windows 7+: IDWriteFactory::CreateGlyphRunAnalysis e IDWriteGlyphRunAnalysis.
+    // - posição horizontal em 1/4 de pixel (subpixel), linha de base no pixel inteiro, tamanho fracionário;
+    // - mistura feita uma vez contra o fundo real, com gamma, realce de contraste, nível de ClearType e ordem dos
+    //   subpixels do monitor onde o texto aparece (CreateMonitorRenderingParams), como o texto nativo do Windows.
+    //   A do Skia (gamma sRGB, contraste 1,0) supõe fundo = complemento da cor e afinava o texto cinza do cartão.
+    // Sem ClearType no sistema, ou com o monitor em geometria plana, cinza (média dos 3 subpixels).
+    // Só usa APIs do Windows 7+: CreateGlyphRunAnalysis, IDWriteGlyphRunAnalysis e CreateMonitorRenderingParams.
     static class DWrite
     {
-        // true = sempre cinza (sem a franja colorida do ClearType), mesmo com ClearType ligado no sistema
-        public static bool SemFranja = false;
+        // Monitor onde o texto aparece (o do notch); zero = o primário
+        public static IntPtr Monitor;
 
         // Gama e contraste do caminho antigo (render target de bitmap), mantido só como reserva se o novo falhar
         const float Gamma = 2.2f;
@@ -32,7 +32,8 @@ namespace Pulso
             [PreserveSig] int GetSystemFontCollection(out IDWriteFontCollection colecao, [MarshalAs(UnmanagedType.Bool)] bool verificar);
             void _CreateCustomFontCollection(); void _RegisterFontCollectionLoader(); void _UnregisterFontCollectionLoader();
             void _CreateFontFileReference(); void _CreateCustomFontFileReference(); void _CreateFontFace();
-            void _CreateRenderingParams(); void _CreateMonitorRenderingParams();
+            void _CreateRenderingParams();
+            [PreserveSig] int CreateMonitorRenderingParams(IntPtr monitor, out IDWriteRenderingParams parametros); // 9º método (índice 8)
             [PreserveSig] int CreateCustomRenderingParams(float gamma, float contraste, float nivelClearType, int geometria, int modo, out IntPtr parametros);
             void _RegisterFontFileLoader(); void _UnregisterFontFileLoader(); void _CreateTextFormat(); void _CreateTypography();
             [PreserveSig] int GetGdiInterop(out IDWriteGdiInterop interop);
@@ -40,6 +41,16 @@ namespace Pulso
             void _CreateTextAnalyzer(); void _CreateNumberSubstitution();
             [PreserveSig] int CreateGlyphRunAnalysis(ref GLYPH_RUN run, float pixelsPorDip, ref MATRIX transformacao,
                 int modo, int medicao, float origemX, float origemY, out IDWriteGlyphRunAnalysis analise); // 21º método (índice 20)
+        }
+
+        [ComImport, Guid("2f0da53a-2add-47cd-82ee-d9ec34688e75"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IDWriteRenderingParams
+        {
+            [PreserveSig] float GetGamma();
+            [PreserveSig] float GetEnhancedContrast();
+            [PreserveSig] float GetClearTypeLevel();
+            [PreserveSig] int GetPixelGeometry(); // 0 = plana (cinza), 1 = RGB, 2 = BGR
+            [PreserveSig] int GetRenderingMode();
         }
 
         [ComImport, Guid("a84cee02-3eea-4eee-a827-87c1a02a0fcc"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -266,62 +277,60 @@ namespace Pulso
             return modo;
         }
 
-        // ---- ClearType do sistema, lido como o Chromium (font_render_params_win.cc): 0 = cinza, 1 = RGB, 2 = BGR ----
-        // Liga/desliga e tipo pelo SystemParametersInfo; a ordem dos subpixels vem primeiro do ajuste do ClearType
-        // (HKCU\SOFTWARE\Microsoft\Avalon.Graphics\DISPLAYn\PixelStructure) e, sem ele, da orientação do sistema.
-        static int subpixel = -1;
-        static int subpixelLidoEm;
-        static int Subpixel()
+        static bool ClearTypeLigado()
         {
-            if (subpixel >= 0 && unchecked(Environment.TickCount - subpixelLidoEm) < 2000) return subpixel;
-            subpixelLidoEm = Environment.TickCount;
-            subpixel = LerSubpixel();
-            return subpixel;
-        }
-        static int LerSubpixel()
-        {
-            uint ligado = 0, tipo = 0, ordem = 0;
-            if (!SystemParametersInfo(0x004A /* SPI_GETFONTSMOOTHING */, 0, ref ligado, 0) || ligado == 0) return 0;
-            if (!SystemParametersInfo(0x200A /* SPI_GETFONTSMOOTHINGTYPE */, 0, ref tipo, 0) || tipo != 2 /* FE_FONTSMOOTHINGCLEARTYPE */) return 0;
-            try
-            {
-                string tela = System.IO.Path.GetFileName(System.Windows.Forms.Screen.PrimaryScreen.DeviceName); // "\\.\DISPLAY1" -> "DISPLAY1"
-                using (var chave = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Avalon.Graphics\" + tela))
-                {
-                    object v = chave == null ? null : chave.GetValue("PixelStructure");
-                    if (v is int) return (int)v == 1 ? 1 : (int)v == 2 ? 2 : 0;
-                }
-            }
-            catch (Exception) { }
-            if (!SystemParametersInfo(0x2012 /* SPI_GETFONTSMOOTHINGORIENTATION */, 0, ref ordem, 0)) return 0;
-            return ordem == 0 ? 2 /* FE_FONTSMOOTHINGORIENTATIONBGR */ : 1 /* RGB */;
+            uint ligado = 0, tipo = 0;
+            if (!SystemParametersInfo(0x004A /* SPI_GETFONTSMOOTHING */, 0, ref ligado, 0) || ligado == 0) return false;
+            return SystemParametersInfo(0x200A /* SPI_GETFONTSMOOTHINGTYPE */, 0, ref tipo, 0) && tipo == 2 /* FE_FONTSMOOTHINGCLEARTYPE */;
         }
 
-        // ---- tabela de pré-mistura do Skia (SkTMaskGamma_build_correcting_lut), gamma sRGB e contraste 1,0 ----
-        static readonly byte[][] tabelas = new byte[8][];
-        static byte[] Tabela(int canal)
+        // ---- parâmetros do DirectWrite do monitor (os do ajuste do ClearType daquele monitor), relidos a cada 2 s
+        // ou ao trocar de monitor. Geometria: 0 = plana (cinza), 1 = RGB, 2 = BGR ----
+        class Ajuste { public float Gama, Realce, Nivel; public int Geometria; public string Assinatura; }
+        static Ajuste ajuste;
+        static IntPtr ajusteDe;
+        static int ajusteLidoEm;
+        static Ajuste AjusteDoMonitor()
         {
-            int i3 = canal >> 5; // 3 bits de luminância, como o SkMaskGamma
-            if (tabelas[i3] != null) return tabelas[i3];
-            int srcI = (i3 << 5) | (i3 << 2) | (i3 >> 1); // sk_t_scale255<3>
-            const float contraste = 1.0f;
-            float src = srcI / 255f, dst = 1f - src;
-            float linSrc = ParaLinear(src), linDst = ParaLinear(dst);
-            float c = contraste * linDst; // o contraste some à medida que a cor vai para o branco
+            IntPtr mon = Monitor != IntPtr.Zero ? Monitor : Nativo.MonitorFromPoint(new Nativo.PONTO(0, 0), 1 /* MONITOR_DEFAULTTOPRIMARY */);
+            if (ajuste != null && mon == ajusteDe && unchecked(Environment.TickCount - ajusteLidoEm) < 2000) return ajuste;
+            // Padrão do DirectWrite, se o monitor não responder
+            var a = new Ajuste { Gama = 1.8f, Realce = 0.5f, Nivel = 1f, Geometria = 1 };
+            IDWriteRenderingParams p = null;
+            try
+            {
+                if (fabrica.CreateMonitorRenderingParams(mon, out p) >= 0)
+                {
+                    a.Gama = p.GetGamma(); a.Realce = p.GetEnhancedContrast(); a.Nivel = p.GetClearTypeLevel(); a.Geometria = p.GetPixelGeometry();
+                }
+            }
+            finally { if (p != null) Marshal.ReleaseComObject(p); }
+            if (!ClearTypeLigado()) a.Geometria = 0;
+            a.Assinatura = a.Geometria + "|" + a.Nivel + "|" + a.Gama + "|" + a.Realce;
+            ajuste = a; ajusteDe = mon; ajusteLidoEm = Environment.TickCount;
+            return a;
+        }
+
+        // Entra na chave dos caches de bitmap de texto (TextoGdi, Tx): muda com o ClearType ou com o monitor
+        public static string Assinatura
+        {
+            get { return Iniciar() ? AjusteDoMonitor().Assinatura : ""; }
+        }
+
+        // Cor final de um canal para cada cobertura (0–255): realce de contraste a(1+k)/(1+ka), como o DirectWrite,
+        // e mistura com o fundo real em gamma g
+        static byte[] Lut(byte cor, byte fundo, Ajuste aj)
+        {
             var t = new byte[256];
+            double g = aj.Gama, k = aj.Realce, c = Math.Pow(cor / 255.0, g), f = Math.Pow(fundo / 255.0, g);
             for (int i = 0; i < 256; i++)
             {
-                float a = i / 255f;
-                float sa = a + ((1f - a) * c * a);
-                if (Math.Abs(src - dst) < 1f / 256f) { t[i] = (byte)Math.Round(255f * sa, MidpointRounding.AwayFromZero); continue; }
-                float saida = DeLinear(linSrc * sa + (1f - sa) * linDst);
-                t[i] = (byte)Math.Max(0, Math.Min(255, Math.Round(255f * (saida - dst) / (src - dst), MidpointRounding.AwayFromZero)));
+                double a = i / 255.0;
+                a = a * (1 + k) / (1 + k * a);
+                t[i] = (byte)Math.Round(255 * Math.Pow(c * a + f * (1 - a), 1 / g));
             }
-            tabelas[i3] = t;
             return t;
         }
-        static float ParaLinear(float v) { return v <= 0.04045f ? v / 12.92f : (float)Math.Pow((v + 0.055f) / 1.055f, 2.4f); }
-        static float DeLinear(float v) { return v <= 0.0031308f ? v * 12.92f : 1.055f * (float)Math.Pow(v, 1 / 2.4f) - 0.055f; }
 
         // ---- máscara ClearType de um glifo numa fase de 1/4 px, com cache ----
         class Mascara { public int Esq, Topo, Larg, Alt; public byte[] Alfa; }
@@ -366,12 +375,12 @@ namespace Pulso
         public static Bitmap Desenhar(Fonte f, float em, string texto, Color cor, Color fundo, float alturaLinha, bool tabular = false)
         {
             if (f == null || string.IsNullOrEmpty(texto)) return null;
-            try { return DesenharComoChromium(f, em, texto, cor, fundo, alturaLinha, tabular); }
+            try { return DesenharGlifos(f, em, texto, cor, fundo, alturaLinha, tabular); }
             catch (Exception e) { Log.Erro("DirectWrite (máscara de glifo); caminho antigo", e); }
             return DesenharRenderTarget(f, em, texto, cor, fundo, alturaLinha, tabular);
         }
 
-        static Bitmap DesenharComoChromium(Fonte f, float em, string texto, Color cor, Color fundo, float alturaLinha, bool tabular)
+        static Bitmap DesenharGlifos(Fonte f, float em, string texto, Color cor, Color fundo, float alturaLinha, bool tabular)
         {
             float k = em / f.Upm;
             var idx = new ushort[texto.Length];
@@ -391,7 +400,6 @@ namespace Pulso
             // Meia entrelinha em cima e embaixo, como o CSS faz com line-height
             int baseY = (int)Math.Round((alturaLinha - (f.Ascent + f.Descent) * k) / 2 + f.Ascent * k);
             int modo = ModoGasp(f, em);
-            int subpixel = SemFranja ? 0 : Subpixel();
 
             var bmp = new Bitmap(w, h, PixelFormat.Format24bppRgb);
             var dados = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
@@ -400,8 +408,8 @@ namespace Pulso
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++) { int o = y * passo + x * 3; px[o] = fundo.B; px[o + 1] = fundo.G; px[o + 2] = fundo.R; }
 
-            byte[] tR = Tabela(cor.R), tG = Tabela(cor.G), tB = Tabela(cor.B);
-            byte[] tA = Tabela((cor.R * 54 + cor.G * 183 + cor.B * 19) >> 8); // SkComputeLuminance
+            // Cobertura de cada subpixel da linha inteira (glifos que se tocam somam, como uma máscara só)
+            var cob = new byte[w * h * 3];
             double caneta = 1; // mesma origem horizontal do caminho antigo
             for (int i = 0; i < idx.Length; i++)
             {
@@ -419,30 +427,39 @@ namespace Pulso
                     {
                         int X = ix + m.Esq + xx;
                         if (X < 0 || X >= w) continue;
-                        int a = (yy * m.Larg + xx) * 3, o = Y * passo + X * 3;
-                        int s0 = m.Alfa[a], s1 = m.Alfa[a + 1], s2 = m.Alfa[a + 2];
-                        if (s0 == 0 && s1 == 0 && s2 == 0) continue;
-                        if (subpixel == 0)
-                        {
-                            int sc = tA[(s0 + s1 + s2) / 3] + 1; // A8 a partir da máscara LCD, SkAlpha255To256
-                            px[o] = (byte)(px[o] + (((cor.B - px[o]) * sc) >> 8));
-                            px[o + 1] = (byte)(px[o + 1] + (((cor.G - px[o + 1]) * sc) >> 8));
-                            px[o + 2] = (byte)(px[o + 2] + (((cor.R - px[o + 2]) * sc) >> 8));
-                        }
-                        else
-                        {
-                            int cr = tR[subpixel == 1 ? s0 : s2] >> 3, cg = tG[s1] >> 3, cb = tB[subpixel == 1 ? s2 : s0] >> 3; // LCD 5-6-5
-                            cr += cr >> 4; cg += cg >> 4; cb += cb >> 4; // 0..31 -> 0..32
-                            px[o] = (byte)(px[o] + (((cor.B - px[o]) * cb) >> 5));
-                            px[o + 1] = (byte)(px[o + 1] + (((cor.G - px[o + 1]) * cg) >> 5));
-                            px[o + 2] = (byte)(px[o + 2] + (((cor.R - px[o + 2]) * cr) >> 5));
-                        }
+                        int a = (yy * m.Larg + xx) * 3, c = (Y * w + X) * 3;
+                        cob[c] = (byte)Math.Min(255, cob[c] + m.Alfa[a]);
+                        cob[c + 1] = (byte)Math.Min(255, cob[c + 1] + m.Alfa[a + 1]);
+                        cob[c + 2] = (byte)Math.Min(255, cob[c + 2] + m.Alfa[a + 2]);
                     }
                 }
             }
+            MisturarComFundo(px, passo, w, h, cob, cor, fundo);
             Marshal.Copy(px, 0, dados.Scan0, px.Length);
             bmp.UnlockBits(dados);
             return bmp;
+        }
+
+        // Uma mistura só, contra o fundo real, com os parâmetros do monitor: o nível de ClearType leva cada subpixel
+        // em direção à média dos três (0 = cinza), e a tabela de cada canal aplica realce e gamma
+        static void MisturarComFundo(byte[] px, int passo, int w, int h, byte[] cob, Color cor, Color fundo)
+        {
+            var aj = AjusteDoMonitor();
+            byte[] lR = Lut(cor.R, fundo.R, aj), lG = Lut(cor.G, fundo.G, aj), lB = Lut(cor.B, fundo.B, aj);
+            float nivel = aj.Geometria == 0 ? 0 : Math.Max(0, Math.Min(1, aj.Nivel));
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int c = (y * w + x) * 3;
+                    int s0 = cob[c], s1 = cob[c + 1], s2 = cob[c + 2];
+                    if (s0 == 0 && s1 == 0 && s2 == 0) continue;
+                    float cinza = (s0 + s1 + s2) / 3f;
+                    int r = (int)Math.Round(cinza + ((aj.Geometria == 2 ? s2 : s0) - cinza) * nivel);
+                    int g = (int)Math.Round(cinza + (s1 - cinza) * nivel);
+                    int b = (int)Math.Round(cinza + ((aj.Geometria == 2 ? s0 : s2) - cinza) * nivel);
+                    int o = y * passo + x * 3;
+                    px[o] = lB[b]; px[o + 1] = lG[g]; px[o + 2] = lR[r];
+                }
         }
 
         // Caminho antigo (render target de bitmap do GDI interop, cinza simétrico): só reserva

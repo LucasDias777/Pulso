@@ -109,7 +109,7 @@ namespace Pulso
                     if (p.Janelas.Count == 0) m.Items.Add(new ToolStripMenuItem("    " + (p.Erro ?? "Aguardando a primeira leitura…")) { Enabled = false });
                 }
                 m.Items.Add(new ToolStripSeparator());
-                m.Items.Add(new ToolStripMenuItem(app.Notch.OcultoPeloAtalho ? "Mostrar o notch" : "Ocultar o notch", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
+                m.Items.Add(new ToolStripMenuItem(app.Notch.OcultoPeloAtalho ? "Mostrar a cápsula" : "Ocultar a cápsula", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
                 m.Items.Add(new ToolStripMenuItem("Atualizar tudo", null, delegate { app.Atualizar(null); }));
             }
             else
@@ -136,7 +136,7 @@ namespace Pulso
                 mover.DropDownItems.Add(new ToolStripMenuItem("Centralizar", null, delegate { cfg.PosicaoNaBorda = 0.5; cfg.Salvar(); app.Notch.Reposicionar(); }));
                 Estilizar((ToolStripDropDownMenu)mover.DropDown);
                 m.Items.Add(mover);
-                m.Items.Add(new ToolStripMenuItem("Ocultar o notch", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
+                m.Items.Add(new ToolStripMenuItem("Ocultar a cápsula", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
             }
             if (Atualizacao.Estado == Atualizacao.Situacao.Disponivel)
                 m.Items.Add(new ToolStripMenuItem("Atualizar o Pulso (versão nova)", null, delegate { Atualizacao.Aplicar(); }));
