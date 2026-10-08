@@ -24,13 +24,23 @@ timeout /t 1 /nobreak >nul
 goto copiar
 
 :copiado
+rem Na primeira vez pergunta os atalhos; 2 = cancelou (tira a cópia, que ainda não foi registrada)
 "%DESTINO%\Pulso.exe" --registrar "%~dp0."
+if errorlevel 2 goto cancelado
 if errorlevel 1 goto falhou
 start "" "%DESTINO%\Pulso.exe"
 echo.
 echo Pronto: o Pulso está instalado e aberto.
-echo Ele aparece no Menu Iniciar e em Configurações ^> Aplicativos do Windows.
+echo Ele aparece em Configurações ^> Aplicativos do Windows.
 timeout /t 4 >nul
+exit /b 0
+
+:cancelado
+del /q "%DESTINO%\Pulso.exe" >nul 2>&1
+rmdir "%DESTINO%" >nul 2>&1
+echo.
+echo Instalação cancelada.
+timeout /t 3 >nul
 exit /b 0
 
 :falhou

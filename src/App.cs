@@ -9,6 +9,8 @@ namespace Pulso
 {
     static class Programa
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -53,15 +55,45 @@ namespace Pulso
             if (args.Length > 0 && (args[0] == "--registrar" || args[0] == "--desinstalar"))
             {
                 Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
                 Config.Carregar(); // idioma das mensagens
-                Environment.Exit(args[0] == "--registrar" ? Instalacao.Registrar(args.Length > 1 ? args[1] : null) : Instalacao.Desinstalar());
+                Environment.Exit(args[0] == "--registrar" ? Instalacao.Registrar(args) : Instalacao.Desinstalar());
             }
             // Pulso.exe baixado das Releases e aberto de outra pasta: instala (perguntando antes) em vez de rodar dali
             if (args.Length == 0 && Instalacao.PrecisaInstalar)
             {
                 Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
                 Config.Carregar();
                 Environment.Exit(Instalacao.InstalarDaqui());
+            }
+            // Diagnóstico: a janela de instalação em PNG, sem mostrar nem instalar nada (--previa-instalacao <arquivo> [pt|en|es])
+            if (args.Length > 1 && args[0] == "--previa-instalacao")
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Config.Carregar();
+                if (args.Length > 2) Config.Atual.Idioma = args[2];
+                using (var j = new OpcoesInstalacao())
+                {
+                    // Fora da tela: os controles só se desenham com a janela aberta
+                    j.StartPosition = FormStartPosition.Manual;
+                    j.Location = new Point(-20000, -20000);
+                    j.ShowInTaskbar = false;
+                    j.Show();
+                    Application.DoEvents();
+                    using (var b = new Bitmap(j.Width, j.Height))
+                    {
+                        using (var g = Graphics.FromImage(b))
+                        {
+                            IntPtr hdc = g.GetHdc();
+                            PrintWindow(j.Handle, hdc, 2); // PW_RENDERFULLCONTENT: moldura como o Windows desenha
+                            g.ReleaseHdc(hdc);
+                        }
+                        b.Save(System.IO.Path.GetFullPath(args[1]), System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+                return;
             }
 
             bool inicio = args.Length > 0 && args[0] == "--inicio"; // aberto pelo Windows ao entrar (chave Run)

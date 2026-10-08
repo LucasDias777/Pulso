@@ -81,7 +81,7 @@
 | **Exibição** | Sempre aberta, recolhida numa cápsula pequena que abre ao passar o cursor, ou oculta, só com o ícone da bandeja. Em qualquer borda e monitor, e some sozinha em tela cheia |
 | **Atalho global** | `Win + Y` mostra e oculta a cápsula de qualquer lugar; dá para gravar outra combinação |
 | **Três idiomas** | Português, inglês e espanhol; a troca vale na hora |
-| **Instala como um app** | Menu Iniciar, Aplicativos do Windows com Desinstalar, início com o Windows e atualização pelo próprio app |
+| **Instala como um app** | Atalho no Menu Iniciar e na área de trabalho (à escolha na instalação), Aplicativos do Windows com Desinstalar, início com o Windows e atualização pelo próprio app |
 
 <div align="center">
   <img src="docs/imagens/notch.png" alt="Cápsula na borda direita" width="150" />
@@ -208,7 +208,7 @@ O Pulso roda em qualquer computador com **Windows 10 ou 11** e se instala como u
 
 1. Clique em **[Instalar Pulso](https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe)** e abra o `Pulso.exe` baixado.
 2. Se o Windows avisar que protegeu o computador (o Pulso não tem assinatura digital), clique em **Mais informações** › **Executar assim mesmo**.
-3. Confirme **Instalar o Pulso neste computador?**: ele se copia para a pasta de programas do usuário, entra no Menu Iniciar e em Aplicativos do Windows e abre.
+3. Na janela **Instalar o Pulso**, escolha os atalhos (**Menu Iniciar** vem marcado; **área de trabalho**, desmarcado) e clique em **Instalar**: ele se copia para a pasta de programas do usuário, entra em Aplicativos do Windows, fica com o ícone na bandeja e abre.
 
 O exe vem das Releases deste repositório, que é privado: o botão só baixa com a conta do GitHub logada no navegador.
 
@@ -235,7 +235,7 @@ git clone https://github.com/LucasDias777/Pulso.git
 Pulso\instalar.cmd
 ```
 
-Também dá para dar dois cliques no `instalar.cmd`. Rodá-lo de novo reinstala por cima, mantendo as configurações.
+Também dá para dar dois cliques no `instalar.cmd`. Na primeira vez ele abre a mesma janela de atalhos do download. Rodá-lo de novo reinstala por cima, mantendo as configurações e os atalhos como estão.
 
 > **Computador com outra conta do GitHub** (como o da empresa): clone com o usuário no endereço, `https://LucasDias777@github.com/LucasDias777/Pulso.git`, para o Git guardar o login pessoal separado.
 
@@ -248,7 +248,7 @@ Também dá para dar dois cliques no `instalar.cmd`. Rodá-lo de novo reinstala 
 
 ## Desinstalação
 
-Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botão **Desinstalar…** em Configurações › Geral. O desinstalador fecha o Pulso, remove o atalho, a entrada em Aplicativos, o início com o Windows e a barra de status do Claude Code (se estava ligada), e pergunta se apaga também as configurações e o histórico. A pasta clonada do projeto não é tocada.
+Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botão **Desinstalar…** em Configurações › Geral. O desinstalador fecha o Pulso, remove os atalhos, a entrada em Aplicativos, o início com o Windows e a barra de status do Claude Code (se estava ligada), e pergunta se apaga também as configurações e o histórico. A pasta clonada do projeto não é tocada.
 
 ## Como usar
 
@@ -310,5 +310,6 @@ Ele compila o commit atual e cria a release `<versão>-<commit>` com o `Pulso.ex
 | `Pulso.exe --captura <pasta> [escala cinza]` | Salva em PNG a cápsula, os cartões e as Configurações, sem mexer no que está na tela; com uma escala (ex.: `2 cinza`), as imagens deste README |
 | `Pulso.exe --bancada <pasta> [1x0.8,1.25x1,…] [idioma]` | Sem abrir o app, salva a cápsula e os cartões em cada combinação de escala do monitor × tamanho, para conferir o texto em telas que não estão ligadas |
 | `Pulso.exe --previa` | Mostra um cartão de aviso de exemplo |
+| `Pulso.exe --previa-instalacao <arquivo.png> [idioma]` | Salva em PNG a janela de instalação, sem mostrar nem instalar nada |
 
 Os demais (`--statusline`, `--sair`, `--registrar`, `--desinstalar` e `--gravar-teste`) são usados pela barra de status do Claude Code e pelos `.cmd`. O log fica em `%APPDATA%\Pulso\pulso.log`, aberto pelo botão **Abrir pasta** em Configurações › Geral.

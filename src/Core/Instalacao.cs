@@ -30,6 +30,7 @@ namespace Pulso
         static string ExeInstalado { get { return Path.Combine(Pasta, "Pulso.exe"); } }
         static string Desinstalador { get { return Path.Combine(Pasta, "desinstalar.cmd"); } }
         static string Atalho { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Pulso.lnk"); } }
+        static string AtalhoAreaDeTrabalho { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Pulso.lnk"); } }
 
         public static bool Instalado
         {
@@ -70,19 +71,29 @@ namespace Pulso
             get { return PastaDoProjeto == null && !string.Equals(Path.GetFullPath(Application.ExecutablePath), Path.GetFullPath(ExeInstalado), StringComparison.OrdinalIgnoreCase); }
         }
 
-        // Pulso.exe baixado: pergunta, fecha o Pulso aberto, copia para a pasta de programas do usuário, registra pelo
-        // próprio instalado (como o instalar.cmd) e o abre. Recusar não instala nada.
+        // Pulso.exe baixado: pergunta (na primeira vez, com os atalhos a criar), fecha o Pulso aberto, copia para a pasta
+        // de programas do usuário, registra pelo próprio instalado (como o instalar.cmd) e o abre. Recusar não instala nada.
         public static int InstalarDaqui()
         {
-            string pergunta = File.Exists(ExeInstalado) ? "Atualizar o Pulso instalado com esta versão?".T()
-                : "Instalar o Pulso neste computador?\n\nEle fica no Menu Iniciar e em Configurações › Aplicativos do Windows, abre junto com o Windows e pode ser desinstalado por lá.".T();
-            if (MessageBox.Show(pergunta, "Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 0;
+            string registrar = "--registrar";
+            if (File.Exists(ExeInstalado))
+            {
+                if (MessageBox.Show("Atualizar o Pulso instalado com esta versão?".T(), "Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 0;
+            }
+            else
+            {
+                using (var j = new OpcoesInstalacao())
+                {
+                    if (j.ShowDialog() != DialogResult.OK) return 0;
+                    registrar += " --menu-iniciar=" + (j.MenuIniciar ? 1 : 0) + " --area-de-trabalho=" + (j.AreaDeTrabalho ? 1 : 0);
+                }
+            }
             try
             {
                 FecharAberto();
                 Directory.CreateDirectory(Pasta);
                 Copiar(Application.ExecutablePath, ExeInstalado);
-                using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, "--registrar") { UseShellExecute = false }))
+                using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, registrar) { UseShellExecute = false }))
                     if (!p.WaitForExit(60000) || p.ExitCode != 0) return 1;
                 Process.Start(new ProcessStartInfo(ExeInstalado) { UseShellExecute = false, WorkingDirectory = Pasta });
                 return 0;
@@ -109,9 +120,27 @@ namespace Pulso
         }
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool DeleteFile(string nome);
 
-        // --registrar <origem>: roda já da pasta instalada, logo depois da cópia
-        public static int Registrar(string origem)
+        // --registrar [origem] [--menu-iniciar=0|1] [--area-de-trabalho=0|1]: roda já da pasta instalada, logo depois da cópia.
+        // Primeira instalação sem as opções (instalar.cmd) mostra a mesma janela do exe baixado; cancelar devolve 2.
+        // Ao atualizar, só renova os atalhos que existem: o que a pessoa apagou continua apagado.
+        public static int Registrar(string[] args)
         {
+            string origem = null;
+            bool? menu = null, area = null;
+            for (int i = 1; i < args.Length; i++)
+            {
+                if (args[i].StartsWith("--menu-iniciar=")) menu = args[i].EndsWith("1");
+                else if (args[i].StartsWith("--area-de-trabalho=")) area = args[i].EndsWith("1");
+                else if (!args[i].StartsWith("--")) origem = args[i];
+            }
+            bool primeira;
+            using (var k = Registry.CurrentUser.OpenSubKey(ChaveApp)) primeira = k == null;
+            if (primeira && !menu.HasValue)
+                using (var j = new OpcoesInstalacao())
+                {
+                    if (j.ShowDialog() != DialogResult.OK) return 2;
+                    menu = j.MenuIniciar; area = j.AreaDeTrabalho;
+                }
             try
             {
                 Caminhos.Garantir();
@@ -122,7 +151,8 @@ namespace Pulso
                     "if errorlevel 1 exit /b 0\r\n" +
                     "cd /d \"%TEMP%\"\r\n" +
                     "(goto) 2>nul & rd /s /q \"%~dp0\"\r\n");
-                CriarAtalho();
+                AjustarAtalho(Atalho, menu ?? (primeira || File.Exists(Atalho)));
+                AjustarAtalho(AtalhoAreaDeTrabalho, area ?? File.Exists(AtalhoAreaDeTrabalho));
                 using (var k = Registry.CurrentUser.CreateSubKey(ChaveApp))
                 {
                     k.SetValue("DisplayName", "Pulso");
@@ -151,21 +181,28 @@ namespace Pulso
             }
         }
 
-        // Atalho do Menu Iniciar pelo WScript.Shell (sem dependência extra)
-        static void CriarAtalho()
+        // Cria (ou renova, apontando para o instalado) ou apaga um atalho
+        static void AjustarAtalho(string arquivo, bool ter)
+        {
+            if (ter) CriarAtalho(arquivo);
+            else try { if (File.Exists(arquivo)) File.Delete(arquivo); } catch { }
+        }
+
+        // Atalho pelo WScript.Shell (sem dependência extra)
+        static void CriarAtalho(string arquivo)
         {
             try
             {
                 var tipo = Type.GetTypeFromProgID("WScript.Shell");
                 object shell = Activator.CreateInstance(tipo);
-                object lnk = tipo.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { Atalho });
+                object lnk = tipo.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { arquivo });
                 var t = lnk.GetType();
                 t.InvokeMember("TargetPath", BindingFlags.SetProperty, null, lnk, new object[] { ExeInstalado });
                 t.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, lnk, new object[] { Pasta });
                 t.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Consumo do Claude Code e do Codex ao vivo".T() });
                 t.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
             }
-            catch (Exception e) { Log.Erro("atalho do Menu Iniciar", e); }
+            catch (Exception e) { Log.Erro("atalho " + arquivo, e); }
         }
 
         // --desinstalar (chamado pelo desinstalar.cmd, que apaga a pasta depois). 1 = cancelado.
@@ -176,7 +213,8 @@ namespace Pulso
             FecharAberto();
             Integracao.IniciarComWindows(false);
             try { if (Integracao.BarraInstalada()) Integracao.RemoverBarra(); } catch { }
-            try { if (File.Exists(Atalho)) File.Delete(Atalho); } catch { }
+            AjustarAtalho(Atalho, false);
+            AjustarAtalho(AtalhoAreaDeTrabalho, false);
             try { Registry.CurrentUser.DeleteSubKeyTree(ChaveApp, false); } catch { }
             if (Directory.Exists(Caminhos.Dados) &&
                 MessageBox.Show("Apagar também as suas configurações e o histórico do Pulso?\n\n{0}\n\nEscolha Não para mantê-los, caso pretenda instalar de novo.".T(Caminhos.Dados),

@@ -19,9 +19,15 @@ namespace Pulso
               "¿Borrar también tu configuración y el historial de Pulso?\n\n{0}\n\nElige No para conservarlos si piensas volver a instalarlo." },
             { "O Pulso foi desinstalado.", "Pulso has been uninstalled.", "Pulso se ha desinstalado." },
             { "Atualizar o Pulso instalado com esta versão?", "Update the installed Pulso to this version?", "¿Actualizar el Pulso instalado con esta versión?" },
-            { "Instalar o Pulso neste computador?\n\nEle fica no Menu Iniciar e em Configurações › Aplicativos do Windows, abre junto com o Windows e pode ser desinstalado por lá.",
-              "Install Pulso on this computer?\n\nIt goes in the Start menu and in Settings › Windows Apps, starts with Windows and can be uninstalled from there.",
-              "¿Instalar Pulso en este equipo?\n\nQueda en el menú Inicio y en Configuración › Aplicaciones de Windows, se abre al iniciar Windows y se puede desinstalar desde allí." },
+            // Janela de instalação (OpcoesInstalacao)
+            { "Instalar o Pulso", "Install Pulso", "Instalar Pulso" },
+            { "Instalar o Pulso neste computador?", "Install Pulso on this computer?", "¿Instalar Pulso en este equipo?" },
+            { "Ele abre junto com o Windows, fica na bandeja do sistema e pode ser desinstalado em Configurações › Aplicativos.",
+              "It starts with Windows, stays in the system tray and can be uninstalled from Settings › Apps.",
+              "Se abre al iniciar Windows, queda en la bandeja del sistema y se puede desinstalar desde Configuración › Aplicaciones." },
+            { "Criar atalho no Menu Iniciar", "Create a Start menu shortcut", "Crear acceso directo en el menú Inicio" },
+            { "Criar atalho na área de trabalho", "Create a desktop shortcut", "Crear acceso directo en el escritorio" },
+            { "Instalar", "Install", "Instalar" },
 
             // Procura de atualização (Configurações)
             { "1 mudança nova", "1 new change", "1 cambio nuevo" },
