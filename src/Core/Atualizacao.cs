@@ -14,12 +14,14 @@ namespace Pulso
         public enum Situacao { Desconhecida, Procurando, EmDia, Disponivel, Erro }
 
         public static Situacao Estado { get; private set; }
-        public static string Detalhe { get; private set; }
+        // Montado a cada leitura, no idioma da vez
+        public static string Detalhe { get { var d = detalhe; return d == null ? null : d(); } }
         public static event Action Mudou;
 
         static SynchronizationContext ui;
         static Timer relogio;
         static int procurando;
+        static Func<string> detalhe;
 
         public static string Commit { get { return Compilacao.Commit; } }
 
@@ -45,10 +47,10 @@ namespace Pulso
                     int novas;
                     if (n == null || !int.TryParse(n.Trim(), out novas)) { Falhou(erro); return; }
                     if (novas == 0) Definir(Situacao.EmDia, null);
-                    else Definir(Situacao.Disponivel, novas == 1 ? "1 mudança nova" : novas + " mudanças novas");
+                    else Definir(Situacao.Disponivel, () => novas == 1 ? "1 mudança nova".T() : "{0} mudanças novas".T(novas));
                     Log.Info("atualização: " + (novas == 0 ? "em dia" : novas + " commit(s) novos"));
                 }
-                catch (Exception e) { Log.Erro("procurar atualização", e); Definir(Situacao.Erro, e.Message); }
+                catch (Exception e) { Log.Erro("procurar atualização", e); Definir(Situacao.Erro, () => e.Message); }
                 finally { procurando = 0; }
             });
         }
@@ -69,17 +71,18 @@ namespace Pulso
         static void Falhou(string erro)
         {
             Log.Info("atualização: não consultou (" + (erro ?? "").Trim().Replace('\n', ' ') + ")");
-            Definir(Situacao.Erro, Motivo(erro));
+            Definir(Situacao.Erro, () => Motivo(erro));
         }
 
         static string Motivo(string erro)
         {
-            if (string.IsNullOrEmpty(erro)) return "Não foi possível consultar o GitHub.";
+            if (string.IsNullOrEmpty(erro)) return "Não foi possível consultar o GitHub.".T();
             if (erro.Contains("not found") || erro.Contains("Authentication") || erro.Contains("could not read Username") || erro.Contains("terminal prompts disabled"))
-                return "O GitHub não liberou o acesso ao repositório. Clique em Procurar atualização para entrar com a sua conta.";
-            if (erro.Contains("Could not resolve host") || erro.Contains("unable to access")) return "Sem conexão com o GitHub.";
+                return "O GitHub não liberou o acesso ao repositório. Clique em Procurar atualização para entrar com a sua conta.".T();
+            if (erro.Contains("Could not resolve host") || erro.Contains("unable to access")) return "Sem conexão com o GitHub.".T();
             string l = erro.Trim().Split('\n')[0].Trim();
-            return l.Length > 140 ? l.Substring(0, 140) + "…" : l;
+            // Os erros escritos pelo Git() abaixo estão na tabela; o texto do próprio git passa igual
+            return (l.Length > 140 ? l.Substring(0, 140) + "…" : l).T();
         }
 
         // Saída do git, ou nulo se falhou (erro = o que ele escreveu)
@@ -107,10 +110,10 @@ namespace Pulso
             catch (System.ComponentModel.Win32Exception) { erro = "Git não encontrado neste computador."; return null; }
         }
 
-        static void Definir(Situacao s, string detalhe)
+        static void Definir(Situacao s, Func<string> d)
         {
             Estado = s;
-            Detalhe = detalhe;
+            detalhe = d;
             var c = ui;
             Action avisar = delegate { var h = Mudou; if (h != null) h(); };
             if (c != null) c.Post(delegate { avisar(); }, null); else avisar();

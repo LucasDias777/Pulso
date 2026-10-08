@@ -31,7 +31,7 @@ namespace Pulso
             if (!p.HasValue) return null;
             double v = Math.Abs(p.Value);
             string n = v < 0.5 ? "<1" : Math.Round(v).ToString("0");
-            return p.Value > 0 ? n + "% acima do ritmo" : n + "% de folga";
+            return (p.Value > 0 ? "{0}% acima do ritmo" : "{0}% de folga").T(n);
         }
 
         // Velocidade real de consumo pelas leituras exatas recentes (Codex e demais; o Claude usa o
@@ -69,7 +69,7 @@ namespace Pulso
             var fim = indice == 6 ? semanal.ResetaEm.Value : inicio.AddMinutes((indice + 1) * dia);
             return new Janela
             {
-                Id = "daily_pace", Rotulo = "Ritmo do dia (" + (indice + 1) + "º de 7)", Minutos = (int)dia,
+                Id = "daily_pace", Rotulo = "Ritmo do dia ({0}º de 7)".T(indice + 1), Minutos = (int)dia,
                 Usado = semanal.Usado / liberado,
                 Estimado = semanal.Estimado.HasValue ? semanal.Estimado.Value / liberado : (double?)null,
                 ResetaEm = fim,

@@ -164,14 +164,14 @@ namespace Pulso
                 return (int)t.TotalHours + "h" + (m > 0 ? " " + m.ToString("00") + "min" : "");
             }
             int dias = (int)t.TotalDays, h = t.Hours;
-            return dias + (dias == 1 ? " dia" : " dias") + (h > 0 ? " " + h + "h" : "");
+            return (dias == 1 ? "{0} dia" : "{0} dias").T(dias) + (h > 0 ? " " + h + "h" : "");
         }
 
         public static string Ha(DateTime utc)
         {
             var t = DateTime.UtcNow - utc;
-            if (t.TotalSeconds < 10) return "agora";
-            return "há " + Duracao(t);
+            if (t.TotalSeconds < 10) return "agora".T();
+            return "há {0}".T(Duracao(t));
         }
     }
 }

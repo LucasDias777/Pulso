@@ -42,7 +42,7 @@ namespace Pulso
             {
                 string pasta = string.IsNullOrEmpty(Pasta) ? null : System.IO.Path.GetFileName(Pasta.TrimEnd('\\', '/'));
                 string curto = Id != null && Id.Length >= 4 ? Id.Substring(0, 4) : Id;
-                return (pasta ?? Nome ?? "sessão") + " · " + curto;
+                return (pasta ?? Nome ?? "sessão".T()) + " · " + curto;
             }
         }
     }

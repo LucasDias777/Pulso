@@ -71,7 +71,7 @@ namespace Pulso
             // 4. Contagem do dia
             var leitura = new Leitura { Plano = plano, Fonte = "registros do Antigravity" };
             leitura.Janelas.Add(new Janela { Id = "requests", Rotulo = "Requisições hoje · sem limite publicado", Contagem = ContarHoje() });
-            leitura.Detalhe = plano != null ? plano + " · o Google não publica cota para esta conta" : "Abra o Antigravity para ler a cota";
+            leitura.Detalhe = plano != null ? "{0} · o Google não publica cota para esta conta".T(plano.T()) : "Abra o Antigravity para ler a cota";
             return leitura;
         }
 

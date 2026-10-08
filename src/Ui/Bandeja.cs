@@ -95,54 +95,54 @@ namespace Pulso
                 {
                     var p = Estado.Copia(id);
                     var j = p.Principal;
-                    string cab = p.Nome + (j != null ? " — " + Texto.Pct(j.Atual, j.Estimado.HasValue && j.Estimado > j.Usado + 0.004) : " — sem leitura");
+                    string cab = j != null ? p.Nome + " — " + Texto.Pct(j.Atual, j.Estimado.HasValue && j.Estimado > j.Usado + 0.004) : "{0} — sem leitura".T(p.Nome);
                     if (p.Confirmado.HasValue && (DateTime.UtcNow - p.Confirmado.Value).TotalMinutes > 15) cab += " · " + Tempo.Ha(p.Confirmado.Value);
                     string idLocal = id;
                     if (negrito == null) negrito = new Font(m.Font, FontStyle.Bold);
-                    var item = new ToolStripMenuItem(cab, null, delegate { app.Atualizar(idLocal); }) { Font = negrito, ToolTipText = "Clique para atualizar" };
+                    var item = new ToolStripMenuItem(cab, null, delegate { app.Atualizar(idLocal); }) { Font = negrito, ToolTipText = "Clique para atualizar".T() };
                     m.Items.Add(item);
                     foreach (var w in p.Janelas)
                     {
                         string rn = Texto.RenovaEm(w.ResetaEm);
-                        m.Items.Add(new ToolStripMenuItem("    " + w.Rotulo + ": " + Texto.UsadoRestante(w.Atual, false) + (rn != null ? " · " + rn : "")) { Enabled = false });
+                        m.Items.Add(new ToolStripMenuItem("    " + w.Rotulo.T() + ": " + Texto.UsadoRestante(w.Atual, false) + (rn != null ? " · " + rn : "")) { Enabled = false });
                     }
-                    if (p.Janelas.Count == 0) m.Items.Add(new ToolStripMenuItem("    " + (p.Erro ?? "Aguardando a primeira leitura…")) { Enabled = false });
+                    if (p.Janelas.Count == 0) m.Items.Add(new ToolStripMenuItem("    " + (p.Erro.T() ?? "Aguardando a primeira leitura…".T())) { Enabled = false });
                 }
                 m.Items.Add(new ToolStripSeparator());
-                m.Items.Add(new ToolStripMenuItem(app.Notch.OcultoPeloAtalho ? "Mostrar a cápsula" : "Ocultar a cápsula", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
-                m.Items.Add(new ToolStripMenuItem("Atualizar tudo", null, delegate { app.Atualizar(null); }));
+                m.Items.Add(new ToolStripMenuItem((app.Notch.OcultoPeloAtalho ? "Mostrar a cápsula" : "Ocultar a cápsula").T(), null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
+                m.Items.Add(new ToolStripMenuItem("Atualizar tudo".T(), null, delegate { app.Atualizar(null); }));
             }
             else
             {
                 string idLocal = provedorSobMouse;
-                m.Items.Add(new ToolStripMenuItem("Atualizar agora", null, delegate { app.Atualizar(null); }));
+                m.Items.Add(new ToolStripMenuItem("Atualizar agora".T(), null, delegate { app.Atualizar(null); }));
                 var info = Catalogo.Info(provedorSobMouse) ?? Catalogo.Todos[0];
                 string url = info.UrlUso;
-                m.Items.Add(new ToolStripMenuItem("Abrir a página de uso — " + info.Nome, null, delegate { Abrir(url); }));
+                m.Items.Add(new ToolStripMenuItem("Abrir a página de uso — {0}".T(info.Nome), null, delegate { Abrir(url); }));
                 m.Items.Add(new ToolStripSeparator());
-                m.Items.Add(new ToolStripMenuItem("Manter aberto", null, delegate
+                m.Items.Add(new ToolStripMenuItem("Manter aberto".T(), null, delegate
                 {
                     cfg.Mostrar = cfg.Mostrar == Mostrar.Sempre ? Mostrar.AoPassar : Mostrar.Sempre;
                     cfg.Salvar();
                     app.Notch.Reposicionar();
                 }) { Checked = cfg.Mostrar == Mostrar.Sempre });
-                var mover = new ToolStripMenuItem("Mover para a borda");
+                var mover = new ToolStripMenuItem("Mover para a borda".T());
                 foreach (Borda b in Enum.GetValues(typeof(Borda)))
                 {
                     var bl = b;
                     mover.DropDownItems.Add(new ToolStripMenuItem(Nome(b), null, delegate { cfg.Borda = bl; cfg.Salvar(); app.Notch.Reposicionar(); }) { Checked = cfg.Borda == b });
                 }
                 mover.DropDownItems.Add(new ToolStripSeparator());
-                mover.DropDownItems.Add(new ToolStripMenuItem("Centralizar", null, delegate { cfg.PosicaoNaBorda = 0.5; cfg.Salvar(); app.Notch.Reposicionar(); }));
+                mover.DropDownItems.Add(new ToolStripMenuItem("Centralizar".T(), null, delegate { cfg.PosicaoNaBorda = 0.5; cfg.Salvar(); app.Notch.Reposicionar(); }));
                 Estilizar((ToolStripDropDownMenu)mover.DropDown);
                 m.Items.Add(mover);
-                m.Items.Add(new ToolStripMenuItem("Ocultar a cápsula", null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
+                m.Items.Add(new ToolStripMenuItem("Ocultar a cápsula".T(), null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
             }
             if (Atualizacao.Estado == Atualizacao.Situacao.Disponivel)
-                m.Items.Add(new ToolStripMenuItem("Atualizar o Pulso (versão nova)", null, delegate { Atualizacao.Aplicar(); }));
-            m.Items.Add(new ToolStripMenuItem("Configurações…", null, delegate { app.AbrirConfig(); }));
+                m.Items.Add(new ToolStripMenuItem("Atualizar o Pulso (versão nova)".T(), null, delegate { Atualizacao.Aplicar(); }));
+            m.Items.Add(new ToolStripMenuItem("Configurações…".T(), null, delegate { app.AbrirConfig(); }));
             m.Items.Add(new ToolStripSeparator());
-            m.Items.Add(new ToolStripMenuItem("Sair do Pulso", null, delegate { app.Sair(); }));
+            m.Items.Add(new ToolStripMenuItem("Sair do Pulso".T(), null, delegate { app.Sair(); }));
         }
 
         static Font negrito;
@@ -156,7 +156,7 @@ namespace Pulso
 
         public static string Nome(Borda b)
         {
-            switch (b) { case Borda.Direita: return "Direita"; case Borda.Esquerda: return "Esquerda"; case Borda.Cima: return "Em cima"; default: return "Embaixo"; }
+            switch (b) { case Borda.Direita: return "Direita".T(); case Borda.Esquerda: return "Esquerda".T(); case Borda.Cima: return "Em cima".T(); default: return "Embaixo".T(); }
         }
 
         static void Abrir(string url)

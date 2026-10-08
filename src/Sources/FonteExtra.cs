@@ -135,9 +135,9 @@ namespace Pulso
                 {
                     var ra = resp.Headers.RetryAfter;
                     var t = ra != null && ra.Delta.HasValue ? ra.Delta.Value : ra != null && ra.Date.HasValue ? ra.Date.Value.UtcDateTime - DateTime.UtcNow : TimeSpan.FromMinutes(5);
-                    throw new SemLeitura("Servidor pediu pausa; nova leitura em " + Tempo.Duracao(t), t < TimeSpan.FromSeconds(60) ? TimeSpan.FromSeconds(60) : t);
+                    throw new SemLeitura("Servidor pediu pausa; nova leitura em {0}".T(Tempo.Duracao(t)), t < TimeSpan.FromSeconds(60) ? TimeSpan.FromSeconds(60) : t);
                 }
-                if (!resp.IsSuccessStatusCode) throw new SemLeitura("Servidor respondeu " + c);
+                if (!resp.IsSuccessStatusCode) throw new SemLeitura("Servidor respondeu {0}".T(c));
                 return resp.Content.ReadAsStringAsync().Result;
             }
         }

@@ -45,17 +45,17 @@ namespace Pulso
             string arq = Caminhos.ClaudeSettings;
             string texto = File.Exists(arq) ? File.ReadAllText(arq) : "{}";
             string outro;
-            if (BarraDeOutro(out outro)) return "Já existe uma barra de status configurada (" + outro + "). Nada foi alterado.";
+            if (BarraDeOutro(out outro)) return "Já existe uma barra de status configurada ({0}). Nada foi alterado.".T(outro);
             if (BarraInstalada()) return null;
-            if (Json.Parse(texto) == null) return "O settings.json do Claude Code não é um JSON válido. Nada foi alterado.";
+            if (Json.Parse(texto) == null) return "O settings.json do Claude Code não é um JSON válido. Nada foi alterado.".T();
             int fim = texto.LastIndexOf('}');
-            if (fim < 0) return "Formato inesperado no settings.json. Nada foi alterado.";
+            if (fim < 0) return "Formato inesperado no settings.json. Nada foi alterado.".T();
             string antes = texto.Substring(0, fim).TrimEnd();
             bool vazio = antes.EndsWith("{");
             var cmd = new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(Comando);
             string bloco = (vazio ? "" : ",") + "\n  \"statusLine\": { \"type\": \"command\", \"command\": " + cmd + ", \"padding\": 0 }\n";
             string novo = antes + bloco + texto.Substring(fim);
-            if (Json.Parse(novo) == null) return "Não consegui montar um JSON válido. Nada foi alterado.";
+            if (Json.Parse(novo) == null) return "Não consegui montar um JSON válido. Nada foi alterado.".T();
             Backup(arq);
             Caminhos.GravarAtomico(arq, novo);
             return null;
@@ -70,7 +70,7 @@ namespace Pulso
             if (!re.IsMatch(texto)) return null;
             string novo = re.Replace(texto, "", 1);
             novo = Regex.Replace(novo, @"\{\s*,", "{");
-            if (Json.Parse(novo) == null) return "Não consegui remover sem quebrar o JSON. Nada foi alterado.";
+            if (Json.Parse(novo) == null) return "Não consegui remover sem quebrar o JSON. Nada foi alterado.".T();
             Backup(arq);
             Caminhos.GravarAtomico(arq, novo);
             return null;
@@ -113,12 +113,13 @@ namespace Pulso
             var rl = Json.Obj(o, "rate_limits");
             if (rl != null) Mensagens.Enviar(2, new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(rl));
 
+            Config.Carregar(); // idioma do texto da barra
             var saida = new StringBuilder();
             string modelo = Json.Str(o, "model", "display_name");
             if (modelo != null) saida.Append(modelo);
             double? h5 = Json.Num(rl, "five_hour", "used_percentage"), sem = Json.Num(rl, "seven_day", "used_percentage");
             if (h5.HasValue) saida.Append(saida.Length > 0 ? " · " : "").Append("5h ").Append(Math.Round(h5.Value)).Append('%');
-            if (sem.HasValue) saida.Append(" · semana ").Append(Math.Round(sem.Value)).Append('%');
+            if (sem.HasValue) saida.Append(" · ").Append("semana {0}%".T(Math.Round(sem.Value)));
             using (var sw = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)))
                 sw.Write(saida.ToString());
         }

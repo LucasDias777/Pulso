@@ -105,7 +105,7 @@ namespace Pulso
         string sobre;
         Alvo segurando;
         bool gravandoAtalho;
-        string avisoAtalho;
+        Func<string> avisoAtalho; // montado na hora de desenhar, para seguir o idioma
 
         static readonly string[] NomesAbas = { "Contas", "Aparência", "Geral" };
 
@@ -113,7 +113,7 @@ namespace Pulso
         {
             this.app = app;
             k = DeviceDpi / 96f;
-            Text = "Pulso — Configurações";
+            Text = "Pulso — Configurações".T();
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             AutoScaleMode = AutoScaleMode.None;
@@ -184,6 +184,7 @@ namespace Pulso
         {
             Config.Atual.Salvar();
             app.AplicarConfig();
+            Text = "Pulso — Configurações".T();
             salvoEm = DateTime.UtcNow;
             Invalidate();
         }
@@ -226,6 +227,47 @@ namespace Pulso
 
         bool Sobre(string id) { return sobre == id; }
 
+        // Bandeira de cada idioma (Idioma.Codigos: Brasil, Estados Unidos, Espanha) em vetor: o Windows não desenha
+        // emoji de bandeira. Simplificadas para o tamanho de um ícone (sem estrelas nem brasão).
+        static void DesenharBandeira(Graphics g, int idioma, RectangleF r)
+        {
+            var est = g.Save();
+            using (var forma = Arred(r, r.Height * 0.16f))
+            {
+                g.SetClip(forma, CombineMode.Intersect);
+                float w = r.Width, h = r.Height, cx = r.X + w / 2, cy = r.Y + h / 2;
+                switch (idioma)
+                {
+                    case 0: // Brasil: verde, losango amarelo, círculo azul com a faixa branca
+                        using (var b = new SolidBrush(Paleta.Hex("#009c3b"))) g.FillRectangle(b, r);
+                        using (var b = new SolidBrush(Paleta.Hex("#ffdf00")))
+                            g.FillPolygon(b, new[] { new PointF(r.X + w * 0.085f, cy), new PointF(cx, r.Y + h * 0.12f), new PointF(r.Right - w * 0.085f, cy), new PointF(cx, r.Bottom - h * 0.12f) });
+                        float rc = h * 0.25f;
+                        using (var circulo = new GraphicsPath())
+                        {
+                            circulo.AddEllipse(cx - rc, cy - rc, 2 * rc, 2 * rc);
+                            using (var b = new SolidBrush(Paleta.Hex("#002776"))) g.FillPath(b, circulo);
+                            g.SetClip(circulo, CombineMode.Intersect);
+                            using (var pen = new Pen(Color.White, Math.Max(1, h * 0.07f)))
+                                g.DrawArc(pen, cx - rc * 2.6f, cy - rc * 0.55f, rc * 4.4f, rc * 4.4f, 200, 100);
+                        }
+                        break;
+                    case 1: // Estados Unidos: 13 listras e o cantão azul
+                        using (var b = new SolidBrush(Color.White)) g.FillRectangle(b, r);
+                        using (var b = new SolidBrush(Paleta.Hex("#b22234")))
+                            for (int i = 0; i < 13; i += 2) g.FillRectangle(b, r.X, r.Y + h * i / 13f, w, h / 13f);
+                        using (var b = new SolidBrush(Paleta.Hex("#3c3b6e"))) g.FillRectangle(b, r.X, r.Y, w * 0.42f, h * 7 / 13f);
+                        break;
+                    default: // Espanha: vermelho, amarelo (o dobro), vermelho
+                        using (var b = new SolidBrush(Paleta.Hex("#aa151b"))) g.FillRectangle(b, r);
+                        using (var b = new SolidBrush(Paleta.Hex("#f1bf00"))) g.FillRectangle(b, r.X, r.Y + h / 4, w, h / 2);
+                        break;
+                }
+                g.Restore(est);
+                using (var pen = new Pen(Color.FromArgb(60, 128, 128, 128), 1)) g.DrawPath(pen, forma);
+            }
+        }
+
         static GraphicsPath Arred(RectangleF r, float raio)
         {
             float d = Math.Min(raio * 2, Math.Min(r.Width, r.Height));
@@ -264,10 +306,10 @@ namespace Pulso
             for (int i = 0; i < NomesAbas.Length; i++)
             {
                 int idx = i;
-                LinhaLateral(g, new RectangleF(x, y, w, E(36)), "aba" + i, NomesAbas[i], i, aba == i, delegate { MostrarAba(idx); });
+                LinhaLateral(g, new RectangleF(x, y, w, E(36)), "aba" + i, NomesAbas[i].T(), i, aba == i, delegate { MostrarAba(idx); });
                 y += E(38);
             }
-            LinhaLateral(g, new RectangleF(x, r.Bottom - E(8) - E(36), w, E(36)), "sair", "Encerrar o Pulso", 3, false, delegate { Close(); app.Sair(); });
+            LinhaLateral(g, new RectangleF(x, r.Bottom - E(8) - E(36), w, E(36)), "sair", "Encerrar o Pulso".T(), 3, false, delegate { Close(); app.Sair(); });
         }
 
         // O ícone do app (tools\gerar-icone.ps1: disco, trilho, arco de consumo e miolo) em vetor, nítido em qualquer DPI
@@ -354,7 +396,7 @@ namespace Pulso
 
         void DesenharCabecalho(Graphics g)
         {
-            Tx.Linha(g, titulo, NomesAbas[aba], c.Text, c.Pane, PaneX + E(24), 0, Tx.Alinhar.Esquerda, 0);
+            Tx.Linha(g, titulo, NomesAbas[aba].T(), c.Text, c.Pane, PaneX + E(24), 0, Tx.Alinhar.Esquerda, 0);
             var f = Fechar;
             bool hov = Sobre("fechar");
             if (hov)
@@ -383,7 +425,7 @@ namespace Pulso
             double t = (DateTime.UtcNow - salvoEm).TotalSeconds;
             if (t > 1.5) return;
             double op = t < 1.2 ? 1 : 1 - (t - 1.2) / 0.3;
-            string txt = "Salvo";
+            string txt = "Salvo".T();
             float w = Tx.Largura(peq, txt) + E(20), h = peq.Linha + E(10);
             var r = new RectangleF(ClientSize.Width - E(18) - w, ClientSize.Height - E(14) - h, w, h);
             var fundo = Sobre(Color.FromArgb((int)(255 * op), c.Side), c.Pane);
@@ -547,7 +589,9 @@ namespace Pulso
         class Segmentado : Ctl
         {
             public string[] Opcoes; public int Sel; public Action<int> Mudou;
-            float Largura(Configuracoes j, int i) { return Tx.Largura(j.ctl, Opcoes[i]) + j.E(28); }
+            public Action<Graphics, int, RectangleF> Icone;   // desenhado antes do texto de cada opção (bandeiras do idioma)
+            float IconeL(Configuracoes j) { return Icone == null ? 0 : j.E(20) + j.E(7); }
+            float Largura(Configuracoes j, int i) { return Tx.Largura(j.ctl, Opcoes[i]) + j.E(28) + IconeL(j); }
             public override SizeF Tamanho(Configuracoes j)
             {
                 float w = j.E(4) + j.E(2) * (Opcoes.Length - 1);
@@ -568,7 +612,16 @@ namespace Pulso
                     if (i == Sel) { f = j.c.Accent; t = j.c.OnAccent; }
                     else if (j.Sobre(id)) f = Sobre(j.c.Hover, bg);
                     if (f != bg) j.Preencher(g, rb, j.E(5), f);
-                    Tx.Linha(g, j.ctl, Opcoes[i], t, f, rb.X + rb.Width / 2, rb.Y + (rb.Height - j.ctl.Linha) / 2, Tx.Alinhar.Centro, 0);
+                    float ty = rb.Y + (rb.Height - j.ctl.Linha) / 2;
+                    if (Icone == null) Tx.Linha(g, j.ctl, Opcoes[i], t, f, rb.X + rb.Width / 2, ty, Tx.Alinhar.Centro, 0);
+                    else
+                    {
+                        // Ícone + texto centrados juntos na opção
+                        float x0 = (float)Math.Round(rb.X + (rb.Width - IconeL(j) - Tx.Largura(j.ctl, Opcoes[i])) / 2);
+                        float ih = (float)Math.Round(j.E(14));
+                        Icone(g, i, new RectangleF(x0, (float)Math.Round(rb.Y + (rb.Height - ih) / 2), (float)Math.Round(j.E(20)), ih));
+                        Tx.Linha(g, j.ctl, Opcoes[i], t, f, x0 + IconeL(j), ty, Tx.Alinhar.Esquerda, 0);
+                    }
                     if (i != Sel) j.Registrar(rb, id, delegate { Mudou(idx); j.Salvou(); }, true);
                     x += rb.Width + j.E(2);
                 }
@@ -593,21 +646,25 @@ namespace Pulso
             var l = new List<Botao>();
             if (gravandoAtalho)
             {
-                l.Add(new Botao { Id = "atalho-cancelar", Texto = "Cancelar", Clique = Atalhos.Cancelar });
+                l.Add(new Botao { Id = "atalho-cancelar", Texto = "Cancelar".T(), Clique = Atalhos.Cancelar });
                 return l;
             }
             l.Add(new Botao
             {
-                Id = "atalho-gravar", Texto = "Gravar novo atalho",
+                Id = "atalho-gravar", Texto = "Gravar novo atalho".T(),
                 Clique = delegate
                 {
                     gravandoAtalho = true; avisoAtalho = null; Invalidate();
                     Atalhos.Gravar((mods, tecla) =>
                     {
                         gravandoAtalho = false;
-                        string texto = Atalhos.Texto(mods, (int)tecla);
-                        avisoAtalho = app.TrocarAtalho(mods, (int)tecla) ? "Pronto: " + texto + " mostra e oculta a cápsula."
-                            : texto + " já é usado pelo Windows ou por outro programa — o atalho anterior continua valendo.";
+                        bool trocou = app.TrocarAtalho(mods, (int)tecla);
+                        avisoAtalho = delegate
+                        {
+                            string texto = Atalhos.Texto(mods, (int)tecla);
+                            return trocou ? "Pronto: {0} mostra e oculta a cápsula.".T(texto)
+                                : "{0} já é usado pelo Windows ou por outro programa — o atalho anterior continua valendo.".T(texto);
+                        };
                         salvoEm = DateTime.UtcNow;
                         Invalidate();
                     }, delegate { gravandoAtalho = false; avisoAtalho = null; Invalidate(); });
@@ -616,11 +673,11 @@ namespace Pulso
             if (cfg.AtalhoMods != Atalhos.PadraoMods || cfg.AtalhoTecla != Atalhos.PadraoTecla)
                 l.Add(new Botao
                 {
-                    Id = "atalho-padrao", Texto = "Restaurar " + Atalhos.Texto(Atalhos.PadraoMods, Atalhos.PadraoTecla),
+                    Id = "atalho-padrao", Texto = "Restaurar {0}".T(Atalhos.Texto(Atalhos.PadraoMods, Atalhos.PadraoTecla)),
                     Clique = delegate
                     {
                         avisoAtalho = app.TrocarAtalho(Atalhos.PadraoMods, Atalhos.PadraoTecla) ? null
-                            : Atalhos.Texto(Atalhos.PadraoMods, Atalhos.PadraoTecla) + " está em uso por outro programa — o atalho anterior continua valendo.";
+                            : (Func<string>)(() => "{0} está em uso por outro programa — o atalho anterior continua valendo.".T(Atalhos.Texto(Atalhos.PadraoMods, Atalhos.PadraoTecla)));
                         salvoEm = DateTime.UtcNow;
                         Invalidate();
                     },
@@ -636,7 +693,7 @@ namespace Pulso
             public override SizeF Tamanho(Configuracoes j)
             {
                 float h = j.ctl.Linha + j.E(8);
-                if (Partes == null) return new SizeF(Tx.Largura(j.ctl, "Pressione as teclas…") + j.E(24), h);
+                if (Partes == null) return new SizeF(Tx.Largura(j.ctl, "Pressione as teclas…".T()) + j.E(24), h);
                 float w = 0;
                 foreach (var p in Partes) w += LarguraTecla(j, p) + j.E(18);
                 return new SizeF(w - j.E(18), h);
@@ -648,7 +705,7 @@ namespace Pulso
                     double t = (DateTime.UtcNow.Millisecond / 1000.0);
                     var f = Sobre(Paleta.Alfa(j.c.Accent, 0.35 + 0.25 * Math.Sin(t * Math.PI * 2)), fundo);
                     j.Preencher(g, r, j.E(6), f);
-                    Tx.Linha(g, j.ctl, "Pressione as teclas…", j.c.Text, f, r.X + r.Width / 2, r.Y + (r.Height - j.ctl.Linha) / 2, Tx.Alinhar.Centro, 0);
+                    Tx.Linha(g, j.ctl, "Pressione as teclas…".T(), j.c.Text, f, r.X + r.Width / 2, r.Y + (r.Height - j.ctl.Linha) / 2, Tx.Alinhar.Centro, 0);
                     return;
                 }
                 float x = r.X;
@@ -740,9 +797,9 @@ namespace Pulso
 
         static string Status(Provedor p)
         {
-            if (p.Janelas.Count == 0) return p.Erro ?? "Sem leitura ainda.";
-            string s = (p.Plano != null ? p.Plano + " · " : "") + (p.Confirmado.HasValue ? "exato " + Tempo.Ha(p.Confirmado.Value) + (p.Fonte != null ? " (" + p.Fonte + ")" : "") : "sem leitura exata");
-            if (p.Nota != null) s += " · " + p.Nota;
+            if (p.Janelas.Count == 0) return p.Erro.T() ?? "Sem leitura ainda.".T();
+            string s = (p.Plano != null ? p.Plano.T() + " · " : "") + (p.Confirmado.HasValue ? "exato {0}".T(Tempo.Ha(p.Confirmado.Value)) + (p.Fonte != null ? " (" + p.Fonte.T() + ")" : "") : "sem leitura exata".T());
+            if (p.Nota != null) s += " · " + p.Nota.T();
             return s;
         }
 
@@ -757,9 +814,9 @@ namespace Pulso
             {
                 var p = Estado.Copia(info.Id);
                 bool ligado = cfg.Ativo(info.Id);
-                string detalhe = !p.Presente ? Util.Maiuscula(p.Ausencia)
-                    : !ligado && p.Janelas.Count == 0 ? "Instalado neste computador — ative para ler o consumo" : Status(p);
-                if (p.Presente && p.Detalhe != null) detalhe = p.Detalhe + (detalhe != null ? " · " + detalhe : "");
+                string detalhe = !p.Presente ? Util.Maiuscula(p.Ausencia.T())
+                    : !ligado && p.Janelas.Count == 0 ? "Instalado neste computador — ative para ler o consumo".T() : Status(p);
+                if (p.Presente && p.Detalhe != null) detalhe = p.Detalhe.T() + (detalhe != null ? " · " + detalhe : "");
                 var conta = new Conta
                 {
                     Provedor = info.Id, Nome = info.Nome, Ligado = ligado, Detalhe = detalhe,
@@ -776,28 +833,28 @@ namespace Pulso
                         Mudou = v =>
                         {
                             string erro = v ? Integracao.InstalarBarra() : Integracao.RemoverBarra();
-                            if (erro != null) MessageBox.Show(this, erro, "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            if (erro != null) MessageBox.Show(this, erro.T(), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         },
                     };
-                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Estimativa ao vivo", NovaChave("estimativa", cfg.Estimativa, v => cfg.Estimativa = v)));
-                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Barra de status do Claude Code", barra));
-                    lista.Add(L("Estimativa ao vivo: o anel anda a cada resposta, sem esperar o servidor (o número aparece com “~”). " +
-                        (deOutro ? "Barra de status: o Claude Code já usa outra barra, e o Pulso não a substitui." :
-                         "Barra de status: quando você usa o Claude Code no terminal, o número exato chega a cada resposta.")));
+                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Estimativa ao vivo".T(), NovaChave("estimativa", cfg.Estimativa, v => cfg.Estimativa = v)));
+                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Barra de status do Claude Code".T(), barra));
+                    lista.Add(L("Estimativa ao vivo: o anel anda a cada resposta, sem esperar o servidor (o número aparece com “~”).".T() + " " +
+                        (deOutro ? "Barra de status: o Claude Code já usa outra barra, e o Pulso não a substitui.".T() :
+                         "Barra de status: quando você usa o Claude Code no terminal, o número exato chega a cada resposta.".T())));
                 }
                 else if (info.Id == "gemini" && ligado)
                 {
                     string[] leit = { "automatico", "5h", "semana" }, mod = { "gemini", "claude-gpt" };
-                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Leitura da cápsula", NovoSeg("ag-leitura", new[] { "Automático", "Limite de 5 horas", "Limite semanal" }, Math.Max(0, Array.IndexOf(leit, cfg.AntigravityLeitura)), i => cfg.AntigravityLeitura = leit[i])));
-                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Dados do modelo", NovoSeg("ag-modelos", new[] { "Modelos Gemini", "Modelos Claude e GPT" }, Math.Max(0, Array.IndexOf(mod, cfg.AntigravityModelos)), i => cfg.AntigravityModelos = mod[i])));
+                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Leitura da cápsula".T(), NovoSeg("ag-leitura", new[] { "Automático".T(), "Limite de 5 horas".T(), "Limite semanal".T() }, Math.Max(0, Array.IndexOf(leit, cfg.AntigravityLeitura)), i => cfg.AntigravityLeitura = leit[i])));
+                    conta.Subs.Add(new KeyValuePair<string, Ctl>("Dados do modelo".T(), NovoSeg("ag-modelos", new[] { "Modelos Gemini".T(), "Modelos Claude e GPT".T() }, Math.Max(0, Array.IndexOf(mod, cfg.AntigravityModelos)), i => cfg.AntigravityModelos = mod[i])));
                 }
             }
-            conectados.Add(L("Pelo menos um provedor permanece selecionado para que a cápsula nunca fique vazia."));
-            var blocos = new List<Bloco> { B("Conectado", conectados.ToArray()) };
+            conectados.Add(L("Pelo menos um provedor permanece selecionado para que a cápsula nunca fique vazia.".T()));
+            var blocos = new List<Bloco> { B("Conectado".T(), conectados.ToArray()) };
             if (desconectados.Count > 0)
             {
-                desconectados.Add(L("Estes não têm anel. Ative um e ele entra no fim da lista acima; um provedor não instalado neste computador não aparece na cápsula."));
-                blocos.Add(B("Não conectado", desconectados.ToArray()));
+                desconectados.Add(L("Estes não têm anel. Ative um e ele entra no fim da lista acima; um provedor não instalado neste computador não aparece na cápsula.".T()));
+                blocos.Add(B("Não conectado".T(), desconectados.ToArray()));
             }
             return blocos;
         }
@@ -806,43 +863,43 @@ namespace Pulso
         {
             var cfg = Config.Atual;
             string[] capMostrar = {
-                "A cápsula fica aberta com todas as leituras visíveis.",
-                "Uma pequena cápsula na borda da tela que abre quando você chega nela.",
-                "A cápsula some; o Pulso continua contando seu uso e o ícone da bandeja fica visível." };
+                "A cápsula fica aberta com todas as leituras visíveis.".T(),
+                "Uma pequena cápsula na borda da tela que abre quando você chega nela.".T(),
+                "A cápsula some; o Pulso continua contando seu uso e o ícone da bandeja fica visível.".T() };
             int tam = cfg.Tamanho < 0.9 ? 0 : cfg.Tamanho < 1.1 ? 1 : 2;
             string[] capTam = {
-                "Cápsula e anéis menores, para ocupar o mínimo da borda. O texto dos cartões continua do tamanho do Médio.",
-                "O tamanho com que a cápsula foi desenhada.",
-                "Mais fácil de ler de relance, e mais difícil de ignorar." };
+                "Cápsula e anéis menores, para ocupar o mínimo da borda. O texto dos cartões continua do tamanho do Médio.".T(),
+                "O tamanho com que a cápsula foi desenhada.".T(),
+                "Mais fácil de ler de relance, e mais difícil de ignorar.".T() };
             int tema = cfg.Tema == Tema.Sistema ? 0 : cfg.Tema == Tema.Claro ? 1 : 2;
             string[] capTema = {
-                "A cápsula e esta janela seguem a cor dos aplicativos do Windows.",
-                "Cápsula e cartão claros, independentemente da configuração do Windows.",
-                "A cápsula escura, independentemente da configuração do Windows." };
+                "A cápsula e esta janela seguem a cor dos aplicativos do Windows.".T(),
+                "Cápsula e cartão claros, independentemente da configuração do Windows.".T(),
+                "A cápsula escura, independentemente da configuração do Windows.".T() };
             string[] capAnel = {
-                "Um anel por provedor, mostrando o limite principal. A cota semanal permanece no cartão ao passar o cursor.",
-                "Um anel mais fino para o limite semanal, desenhado dentro do principal. Ele compartilha o espaço com o indicador de atividade.",
-                "Um anel mais fino para o limite semanal, desenhado ao redor do principal, no espaço entre o anel e a borda da cápsula." };
+                "Um anel por provedor, mostrando o limite principal. A cota semanal permanece no cartão ao passar o cursor.".T(),
+                "Um anel mais fino para o limite semanal, desenhado dentro do principal. Ele compartilha o espaço com o indicador de atividade.".T(),
+                "Um anel mais fino para o limite semanal, desenhado ao redor do principal, no espaço entre o anel e a borda da cápsula.".T() };
             // Ordem das bordas: Esquerda, Direita, Superior, Inferior
             var bordas = new[] { Borda.Esquerda, Borda.Direita, Borda.Cima, Borda.Baixo };
             var linhasNotch = new List<Linha>
             {
-                I("Exibição", NovoSeg("mostrar", new[] { "Sempre exibir", "Exibir ao passar o cursor", "Ocultar" }, (int)cfg.Mostrar, i => { cfg.Mostrar = (Mostrar)i; if (cfg.Mostrar == Mostrar.Oculto) cfg.IconeBandeja = true; })),
+                I("Exibição".T(), NovoSeg("mostrar", new[] { "Sempre exibir".T(), "Exibir ao passar o cursor".T(), "Ocultar".T() }, (int)cfg.Mostrar, i => { cfg.Mostrar = (Mostrar)i; if (cfg.Mostrar == Mostrar.Oculto) cfg.IconeBandeja = true; })),
                 L(capMostrar[(int)cfg.Mostrar]),
-                cfg.Mostrar == Mostrar.AoPassar ? I("Cápsula adaptável", NovaChave("adaptavel", cfg.CapsulaAdaptavel, v => cfg.CapsulaAdaptavel = v)) : null,
-                cfg.Mostrar == Mostrar.AoPassar ? L("Enquanto está recolhida, a cápsula acompanha o que está atrás dela: clara sobre fundo escuro, preta sobre fundo claro, para continuar fácil de achar. Para isso, o Pulso lê uma faixa fina da tela ao lado da cápsula duas vezes por segundo e guarda só o brilho médio.") : null,
-                I("Tamanho", NovoSeg("tamanho", new[] { "Pequeno", "Médio", "Grande" }, tam, i => cfg.Tamanho = new[] { 0.8, 1.0, 1.25 }[i])),
+                cfg.Mostrar == Mostrar.AoPassar ? I("Cápsula adaptável".T(), NovaChave("adaptavel", cfg.CapsulaAdaptavel, v => cfg.CapsulaAdaptavel = v)) : null,
+                cfg.Mostrar == Mostrar.AoPassar ? L("Enquanto está recolhida, a cápsula acompanha o que está atrás dela: clara sobre fundo escuro, preta sobre fundo claro, para continuar fácil de achar. Para isso, o Pulso lê uma faixa fina da tela ao lado da cápsula duas vezes por segundo e guarda só o brilho médio.".T()) : null,
+                I("Tamanho".T(), NovoSeg("tamanho", new[] { "Pequeno".T(), "Médio".T(), "Grande".T() }, tam, i => cfg.Tamanho = new[] { 0.8, 1.0, 1.25 }[i])),
                 L(capTam[tam]),
-                I("Tema", NovoSeg("tema", new[] { "Do sistema", "Clara", "Escura" }, tema, i => cfg.Tema = new[] { Tema.Sistema, Tema.Claro, Tema.Escuro }[i])),
+                I("Tema".T(), NovoSeg("tema", new[] { "Do sistema".T(), "Clara".T(), "Escura".T() }, tema, i => cfg.Tema = new[] { Tema.Sistema, Tema.Claro, Tema.Escuro }[i])),
                 L(capTema[tema]),
-                I("Anel semanal", NovoSeg("anel", new[] { "Desativado", "Dentro", "Fora" }, (int)cfg.AnelSemanal, i => cfg.AnelSemanal = (AnelSemanal)i)),
+                I("Anel semanal".T(), NovoSeg("anel", new[] { "Desativado".T(), "Dentro".T(), "Fora".T() }, (int)cfg.AnelSemanal, i => cfg.AnelSemanal = (AnelSemanal)i)),
                 L(capAnel[(int)cfg.AnelSemanal]),
-                cfg.AnelSemanal != AnelSemanal.Desligado ? I("Anel semanal tracejado", NovaChave("tracejado", cfg.AnelTracejado, v => cfg.AnelTracejado = v)) : null,
-                I("Ritmo do dia no Claude", NovaChave("ritmodia", cfg.RitmoDiario, v => cfg.RitmoDiario = v)),
-                L("O anel do Claude passa a mostrar o uso da semana contra a parte liberada até hoje: 1/7 da cota por dia, contado a partir da abertura da semana. Gastando no ritmo, o anel só chega a 100% no fim de cada dia. A sessão de 5 horas continua no cartão."),
-                I("Consumo por projeto no cartão", NovaChave("projetos", cfg.ProjetosNoCartao, v => cfg.ProjetosNoCartao = v)),
-                L("O cartão do Claude e do Codex mostra quanto da sessão de 5 horas veio de cada pasta de projeto. Conta só o uso deste computador."),
-                I("Borda", NovoSeg("borda", new[] { "Esquerda", "Direita", "Superior", "Inferior" }, Array.IndexOf(bordas, cfg.Borda), i => cfg.Borda = bordas[i])),
+                cfg.AnelSemanal != AnelSemanal.Desligado ? I("Anel semanal tracejado".T(), NovaChave("tracejado", cfg.AnelTracejado, v => cfg.AnelTracejado = v)) : null,
+                I("Ritmo do dia no Claude".T(), NovaChave("ritmodia", cfg.RitmoDiario, v => cfg.RitmoDiario = v)),
+                L("O anel do Claude passa a mostrar o uso da semana contra a parte liberada até hoje: 1/7 da cota por dia, contado a partir da abertura da semana. Gastando no ritmo, o anel só chega a 100% no fim de cada dia. A sessão de 5 horas continua no cartão.".T()),
+                I("Consumo por projeto no cartão".T(), NovaChave("projetos", cfg.ProjetosNoCartao, v => cfg.ProjetosNoCartao = v)),
+                L("O cartão do Claude e do Codex mostra quanto da sessão de 5 horas veio de cada pasta de projeto. Conta só o uso deste computador.".T()),
+                I("Borda".T(), NovoSeg("borda", new[] { "Esquerda".T(), "Direita".T(), "Superior".T(), "Inferior".T() }, Array.IndexOf(bordas, cfg.Borda), i => cfg.Borda = bordas[i])),
             };
             var telas = Screen.AllScreens;
             if (telas.Length > 1)
@@ -851,24 +908,24 @@ namespace Pulso
                 var nomes = new string[telas.Length];
                 for (int i = 0; i < telas.Length; i++)
                 {
-                    nomes[i] = (i + 1) + (telas[i].Primary ? " · principal" : "");
+                    nomes[i] = telas[i].Primary ? "{0} · principal".T(i + 1) : (i + 1).ToString();
                     if ((cfg.Monitor == null && telas[i].Primary) || telas[i].DeviceName == cfg.Monitor) sel = i;
                 }
-                linhasNotch.Add(I("Tela", NovoSeg("tela", nomes, sel, i => cfg.Monitor = telas[i].Primary ? null : telas[i].DeviceName)));
+                linhasNotch.Add(I("Tela".T(), NovoSeg("tela", nomes, sel, i => cfg.Monitor = telas[i].Primary ? null : telas[i].DeviceName)));
                 linhasNotch.Add(L(string.Join("   ", telas.Select((t, i) => (i + 1) + ": " + t.Bounds.Width + " × " + t.Bounds.Height).ToArray())));
             }
-            linhasNotch.Add(I("Arrastável", NovaChave("arrastavel", cfg.Arrastavel, v => cfg.Arrastavel = v)));
+            linhasNotch.Add(I("Arrastável".T(), NovaChave("arrastavel", cfg.Arrastavel, v => cfg.Arrastavel = v)));
             if (cfg.Arrastavel)
                 linhasNotch.Add(new Item
                 {
                     Dica = true,
-                    Rotulo = "Segure Alt e arraste a cápsula, ou arraste a engrenagem ou os pontinhos ao lado dela, para levá-la pelas bordas da tela. Cada borda lembra onde você a deixou. Recentralizar a põe de volta no meio da borda em que está.",
-                    C = NovoBotao("recentralizar", "Recentralizar", delegate { cfg.PosicaoNaBorda = 0.5; Salvou(); }),
+                    Rotulo = "Segure Alt e arraste a cápsula, ou arraste a engrenagem ou os pontinhos ao lado dela, para levá-la pelas bordas da tela. Cada borda lembra onde você a deixou. Recentralizar a põe de volta no meio da borda em que está.".T(),
+                    C = NovoBotao("recentralizar", "Recentralizar".T(), delegate { cfg.PosicaoNaBorda = 0.5; Salvou(); }),
                 });
             else
-                linhasNotch.Add(L("A cápsula fica fixa no meio da borda escolhida acima. Ao passar o cursor na orelha de baixo aparece só a engrenagem das configurações, sem os pontinhos de arrastar."));
+                linhasNotch.Add(L("A cápsula fica fixa no meio da borda escolhida acima. Ao passar o cursor na orelha de baixo aparece só a engrenagem das configurações, sem os pontinhos de arrastar.".T()));
 
-            var transicao = NovoSeg("transicao", new[] { "Degrau seco", "Rampa de cor" }, cfg.CorGradual ? 1 : 0, i => cfg.CorGradual = i == 1);
+            var transicao = NovoSeg("transicao", new[] { "Degrau seco".T(), "Rampa de cor".T() }, cfg.CorGradual ? 1 : 0, i => cfg.CorGradual = i == 1);
             float largDesl = transicao.Tamanho(this).Width;
             var atencao = new Deslizante { Id = "atencao", Min = 1, Max = 99, Atual = (int)Math.Round(cfg.LimiteAtencao * 100), Largura = largDesl };
             var critico = new Deslizante { Id = "critico", Min = 1, Max = 100, Atual = (int)Math.Round(cfg.LimiteCritico * 100), Largura = largDesl };
@@ -877,84 +934,87 @@ namespace Pulso
 
             return new List<Bloco>
             {
-                B("Cápsula", linhasNotch.ToArray()),
-                B("Limites de uso",
-                    I("Transição de cor", transicao),
-                    L(cfg.CorGradual ? "A cor muda continuamente de verde para vermelho em toda a faixa e fica amarela no limite de atenção abaixo."
-                                     : "Verde, amarelo e vermelho permanecem cores sólidas e mudam de uma para outra nos limites abaixo."),
-                    I("Limite de atenção", atencao),
-                    I("Limite crítico", critico),
-                    cfg.CorGradual ? L("Com a rampa de cor ativada, o anel só fica vermelho em 100%, então o limite crítico vale no modo Degrau seco.") : null,
-                    I("", NovoBotao("restaurar", "Restaurar padrões", delegate { cfg.CorGradual = false; cfg.LimiteAtencao = 0.5; cfg.LimiteCritico = 0.7; Salvou(); }))),
-                B("App",
-                    I("Ícone do app", NovoSeg("bandeja", new[] { "Bandeja do sistema", "Nenhum" }, cfg.IconeBandeja ? 0 : 1, i => cfg.IconeBandeja = i == 0 || cfg.Mostrar == Mostrar.Oculto)),
-                    L(cfg.Mostrar == Mostrar.Oculto ? "Com a cápsula oculta, o ícone na bandeja fica, para você não perder o acesso."
-                        : cfg.IconeBandeja ? "O ícone na bandeja mostra um mini anel com o consumo atual." : "Sem ícone na bandeja; a cápsula é o único acesso.")),
+                B("Cápsula".T(), linhasNotch.ToArray()),
+                B("Limites de uso".T(),
+                    I("Transição de cor".T(), transicao),
+                    L(cfg.CorGradual ? "A cor muda continuamente de verde para vermelho em toda a faixa e fica amarela no limite de atenção abaixo.".T()
+                                     : "Verde, amarelo e vermelho permanecem cores sólidas e mudam de uma para outra nos limites abaixo.".T()),
+                    I("Limite de atenção".T(), atencao),
+                    I("Limite crítico".T(), critico),
+                    cfg.CorGradual ? L("Com a rampa de cor ativada, o anel só fica vermelho em 100%, então o limite crítico vale no modo Degrau seco.".T()) : null,
+                    I("", NovoBotao("restaurar", "Restaurar padrões".T(), delegate { cfg.CorGradual = false; cfg.LimiteAtencao = 0.5; cfg.LimiteCritico = 0.7; Salvou(); }))),
+                B("App".T(),
+                    I("Ícone do app".T(), NovoSeg("bandeja", new[] { "Bandeja do sistema".T(), "Nenhum".T() }, cfg.IconeBandeja ? 0 : 1, i => cfg.IconeBandeja = i == 0 || cfg.Mostrar == Mostrar.Oculto)),
+                    L(cfg.Mostrar == Mostrar.Oculto ? "Com a cápsula oculta, o ícone na bandeja fica, para você não perder o acesso.".T()
+                        : cfg.IconeBandeja ? "O ícone na bandeja mostra um mini anel com o consumo atual.".T() : "Sem ícone na bandeja; a cápsula é o único acesso.".T())),
             };
         }
 
         List<Bloco> Geral()
         {
             var cfg = Config.Atual;
+            var idioma = NovoSeg("idioma", Idioma.Nomes, Idioma.Indice, i => cfg.Idioma = Idioma.Codigos[i]);
+            idioma.Icone = DesenharBandeira;
             return new List<Bloco>
             {
                 B(null,
-                    I("Abrir o Pulso ao entrar no Windows", NovaChave("iniciar", cfg.IniciarComWindows, v => { cfg.IniciarComWindows = v; Integracao.IniciarComWindows(v); })),
-                    L("O Pulso abre sozinho toda vez que você entra neste computador e fica quieto em segundo plano. Desative e você precisará abri-lo manualmente."),
-                    I("Atalho para mostrar e ocultar a cápsula", NovaChave("atalho", cfg.Atalho, v => { cfg.Atalho = v; app.AplicarAtalho(); })),
-                    I("Teclas", new Teclas { Partes = gravandoAtalho ? null : Atalhos.Partes(cfg.AtalhoMods, cfg.AtalhoTecla) }),
+                    I("Idioma".T(), idioma),
+                    I("Abrir o Pulso ao entrar no Windows".T(), NovaChave("iniciar", cfg.IniciarComWindows, v => { cfg.IniciarComWindows = v; Integracao.IniciarComWindows(v); })),
+                    L("O Pulso abre sozinho toda vez que você entra neste computador e fica quieto em segundo plano. Desative e você precisará abri-lo manualmente.".T()),
+                    I("Atalho para mostrar e ocultar a cápsula".T(), NovaChave("atalho", cfg.Atalho, v => { cfg.Atalho = v; app.AplicarAtalho(); })),
+                    I("Teclas".T(), new Teclas { Partes = gravandoAtalho ? null : Atalhos.Partes(cfg.AtalhoMods, cfg.AtalhoTecla) }),
                     I("", new Botoes { Itens = BotoesAtalho(cfg) }),
-                    L(gravandoAtalho ? "Pressione a combinação: Ctrl, Alt, Shift ou Win com outra tecla, ou uma tecla de F1 a F24. Esc cancela."
-                        : avisoAtalho ?? (!cfg.Atalho ? "Desativado." : app.AtalhoAtivo ? "Mostra e oculta a cápsula de qualquer lugar."
-                        : cfg.AtalhoTexto + " está em uso por outro programa — grave outra combinação."))),
-                B("Notificações",
-                    I("Avisos de renovação", NovaChave("renovacao", cfg.AvisoRenovacao, v => cfg.AvisoRenovacao = v)),
-                    L("Mostra um cartão ao lado da cápsula quando o Claude ou o Codex renova uma janela depois de pelo menos 10% de uso. O cartão aparece mesmo com a cápsula oculta."),
-                    I("Aviso de limite", NovaChave("limite", cfg.AvisoLimite, v => cfg.AvisoLimite = v)),
-                    L("Avisa quando uma janela chega a 80%, a 95% e ao limite, uma vez por janela — sempre pelo valor exato, nunca pela estimativa."),
-                    I("Aviso de ritmo", NovaChave("ritmo", cfg.AvisoRitmo, v => cfg.AvisoRitmo = v)),
-                    L("Avisa quando, no ritmo dos últimos 30 minutos, a sessão de 5 horas vai acabar antes de renovar — com tempo de desacelerar antes dos avisos de 80% e 95%. Uma vez por sessão."),
-                    I("Sessão terminou", NovaChave("fim", cfg.AvisoSessaoFim, v => cfg.AvisoSessaoFim = v)),
-                    L("Avisa quando o Claude ou o Codex termina uma resposta que levou pelo menos 10 segundos — a não ser que você já esteja na janela dela. Clicar no cartão leva até a janela."),
-                    I("Sessão esperando você", NovaChave("espera", cfg.AvisoSessaoEspera, v => cfg.AvisoSessaoEspera = v)),
-                    L("Avisa quando uma sessão para e pede a sua resposta (permissão, pergunta)."),
-                    I("Som dos avisos", NovaChave("som", cfg.SomAvisos, v => cfg.SomAvisos = v)),
-                    I("Pré-visualizar o cartão", NovoBotao("previa", "Pré-visualizar", delegate { app.Cartao.Mostrar(Avisos.Exemplo()); }))),
-                B("Atualizações", LinhasAtualizacao().ToArray()),
+                    L(gravandoAtalho ? "Pressione a combinação: Ctrl, Alt, Shift ou Win com outra tecla, ou uma tecla de F1 a F24. Esc cancela.".T()
+                        : avisoAtalho != null ? avisoAtalho() : !cfg.Atalho ? "Desativado.".T() : app.AtalhoAtivo ? "Mostra e oculta a cápsula de qualquer lugar.".T()
+                        : "{0} está em uso por outro programa — grave outra combinação.".T(cfg.AtalhoTexto))),
+                B("Notificações".T(),
+                    I("Avisos de renovação".T(), NovaChave("renovacao", cfg.AvisoRenovacao, v => cfg.AvisoRenovacao = v)),
+                    L("Mostra um cartão ao lado da cápsula quando o Claude ou o Codex renova uma janela depois de pelo menos 10% de uso. O cartão aparece mesmo com a cápsula oculta.".T()),
+                    I("Aviso de limite".T(), NovaChave("limite", cfg.AvisoLimite, v => cfg.AvisoLimite = v)),
+                    L("Avisa quando uma janela chega a 80%, a 95% e ao limite, uma vez por janela — sempre pelo valor exato, nunca pela estimativa.".T()),
+                    I("Aviso de ritmo".T(), NovaChave("ritmo", cfg.AvisoRitmo, v => cfg.AvisoRitmo = v)),
+                    L("Avisa quando, no ritmo dos últimos 30 minutos, a sessão de 5 horas vai acabar antes de renovar — com tempo de desacelerar antes dos avisos de 80% e 95%. Uma vez por sessão.".T()),
+                    I("Sessão terminou".T(), NovaChave("fim", cfg.AvisoSessaoFim, v => cfg.AvisoSessaoFim = v)),
+                    L("Avisa quando o Claude ou o Codex termina uma resposta que levou pelo menos 10 segundos — a não ser que você já esteja na janela dela. Clicar no cartão leva até a janela.".T()),
+                    I("Sessão esperando você".T(), NovaChave("espera", cfg.AvisoSessaoEspera, v => cfg.AvisoSessaoEspera = v)),
+                    L("Avisa quando uma sessão para e pede a sua resposta (permissão, pergunta).".T()),
+                    I("Som dos avisos".T(), NovaChave("som", cfg.SomAvisos, v => cfg.SomAvisos = v)),
+                    I("Pré-visualizar o cartão".T(), NovoBotao("previa", "Pré-visualizar".T(), delegate { app.Cartao.Mostrar(Avisos.Exemplo()); }))),
+                B("Atualizações".T(), LinhasAtualizacao().ToArray()),
                 B(null,
-                    I("Pasta de dados", NovoBotao("pasta", "Abrir pasta", delegate { try { Process.Start(new ProcessStartInfo(Caminhos.Dados) { UseShellExecute = true }); } catch { } })),
-                    L("Tudo o que o Pulso guarda fica numa pasta: configurações, estado, índice de custo e log. Nenhuma credencial."),
-                    Instalacao.Instalado ? I("Desinstalar o Pulso", NovoBotao("desinstalar", "Desinstalar…", Instalacao.AbrirDesinstalador)) : null,
-                    Instalacao.Instalado ? L("Também dá para desinstalar em Configurações › Aplicativos do Windows. Você escolhe se as suas configurações ficam.") : null),
+                    I("Pasta de dados".T(), NovoBotao("pasta", "Abrir pasta".T(), delegate { try { Process.Start(new ProcessStartInfo(Caminhos.Dados) { UseShellExecute = true }); } catch { } })),
+                    L("Tudo o que o Pulso guarda fica numa pasta: configurações, estado, índice de custo e log. Nenhuma credencial.".T()),
+                    Instalacao.Instalado ? I("Desinstalar o Pulso".T(), NovoBotao("desinstalar", "Desinstalar…".T(), Instalacao.AbrirDesinstalador)) : null,
+                    Instalacao.Instalado ? L("Também dá para desinstalar em Configurações › Aplicativos do Windows. Você escolhe se as suas configurações ficam.".T()) : null),
             };
         }
 
         List<Linha> LinhasAtualizacao()
         {
             var l = new List<Linha>();
-            l.Add(I("Versão", new Valor { Texto = Instalacao.Versao }));
+            l.Add(I("Versão".T(), new Valor { Texto = Instalacao.Versao }));
             if (Instalacao.Origem == null)
             {
-                l.Add(L("Para receber atualizações por aqui, instale o Pulso pelo instalar.cmd da pasta do projeto clonada do GitHub."));
+                l.Add(L("Para receber atualizações por aqui, instale o Pulso pelo instalar.cmd da pasta do projeto clonada do GitHub.".T()));
                 return l;
             }
             var st = Atualizacao.Estado;
             var botoes = new List<Botao>();
-            if (st == Atualizacao.Situacao.Disponivel) botoes.Add(NovoBotao("atualizar", "Atualizar agora", Atualizacao.Aplicar));
+            if (st == Atualizacao.Situacao.Disponivel) botoes.Add(NovoBotao("atualizar", "Instalar atualização".T(), Atualizacao.Aplicar));
             botoes.Add(new Botao
             {
-                Id = "procurar", Texto = st == Atualizacao.Situacao.Procurando ? "Procurando…" : "Procurar atualização",
+                Id = "procurar", Texto = st == Atualizacao.Situacao.Procurando ? "Procurando…".T() : "Procurar atualização".T(),
                 Desativado = st == Atualizacao.Situacao.Procurando, Clique = delegate { Atualizacao.Procurar(true); },
             });
             l.Add(I("", new Botoes { Itens = botoes }));
             string texto;
             switch (st)
             {
-                case Atualizacao.Situacao.Disponivel: texto = "Versão nova no GitHub (" + Atualizacao.Detalhe + "). Atualizar agora baixa, compila e reabre o Pulso em alguns segundos."; break;
-                case Atualizacao.Situacao.EmDia: texto = "Você está com a versão mais recente."; break;
-                case Atualizacao.Situacao.Erro: texto = Atualizacao.Detalhe; break;
-                case Atualizacao.Situacao.Procurando: texto = "Consultando o GitHub…"; break;
-                default: texto = "O Pulso procura sozinho 2 minutos depois de abrir e a cada 12 horas, sem interromper você."; break;
+                case Atualizacao.Situacao.Disponivel: texto = "Versão nova no GitHub ({0}). Instalar atualização baixa, compila e reabre o Pulso em alguns segundos.".T(Atualizacao.Detalhe.T()); break;
+                case Atualizacao.Situacao.EmDia: texto = "Você está com a versão mais recente.".T(); break;
+                case Atualizacao.Situacao.Erro: texto = Atualizacao.Detalhe.T(); break;
+                case Atualizacao.Situacao.Procurando: texto = "Consultando o GitHub…".T(); break;
+                default: texto = "O Pulso procura sozinho 2 minutos depois de abrir e a cada 12 horas, sem interromper você.".T(); break;
             }
             l.Add(L(texto));
             return l;

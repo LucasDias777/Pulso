@@ -97,7 +97,7 @@ namespace Pulso
             Task.Factory.StartNew(delegate
             {
                 try { ConsultarAgora(); }
-                catch (Exception e) { Log.Erro("claude: consulta", e); Nota("Sem resposta do servidor (" + e.GetType().Name + ")", true); }
+                catch (Exception e) { Log.Erro("claude: consulta", e); Nota("Sem resposta do servidor ({0})".T(e.GetType().Name), true); }
                 finally { consultando = 0; }
             });
         }
@@ -139,7 +139,7 @@ namespace Pulso
                     if (ra.HasValue && ra.Value > espera) espera = ra.Value;
                     esperaAte = DateTime.UtcNow + espera;
                     Log.Info("claude: 429, aguardando " + (int)espera.TotalSeconds + " s");
-                    Nota("Servidor pediu pausa; leitura exata em " + Tempo.Duracao(espera), false);
+                    Nota("Servidor pediu pausa; leitura exata em {0}".T(Tempo.Duracao(espera)), false);
                     Persistir();
                     return;
                 }
@@ -152,7 +152,7 @@ namespace Pulso
                 if (!resp.IsSuccessStatusCode)
                 {
                     esperaAte = DateTime.UtcNow.AddSeconds(90);
-                    Nota("Servidor respondeu " + codigo, false);
+                    Nota("Servidor respondeu {0}".T(codigo), false);
                     return;
                 }
                 falhas429 = 0;
@@ -189,7 +189,7 @@ namespace Pulso
                     string id = Normalizar(tipo);
                     var j = Nova(id, pct.Value, Json.Data(l, "resets_at"));
                     string modelo = Json.Str(l, "scope", "model", "displayName");
-                    if (modelo != null && id != "session" && id != "weekly_all") j.Rotulo = "Semana (" + modelo + ")";
+                    if (modelo != null && id != "session" && id != "weekly_all") j.Rotulo = "Semana ({0})".T(modelo);
                     if (!r.ContainsKey(id)) r[id] = j;
                 }
             }

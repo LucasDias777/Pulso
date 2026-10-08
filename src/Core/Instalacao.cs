@@ -90,7 +90,7 @@ namespace Pulso
             catch (Exception e)
             {
                 Log.Erro("registrar instalação", e);
-                MessageBox.Show("Não foi possível concluir a instalação do Pulso:\n\n" + e.Message, "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Não foi possível concluir a instalação do Pulso:\n\n{0}".T(e.Message), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
         }
@@ -106,7 +106,7 @@ namespace Pulso
                 var t = lnk.GetType();
                 t.InvokeMember("TargetPath", BindingFlags.SetProperty, null, lnk, new object[] { ExeInstalado });
                 t.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, lnk, new object[] { Pasta });
-                t.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Consumo do Claude Code e do Codex ao vivo" });
+                t.InvokeMember("Description", BindingFlags.SetProperty, null, lnk, new object[] { "Consumo do Claude Code e do Codex ao vivo".T() });
                 t.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
             }
             catch (Exception e) { Log.Erro("atalho do Menu Iniciar", e); }
@@ -115,21 +115,20 @@ namespace Pulso
         // --desinstalar (chamado pelo desinstalar.cmd, que apaga a pasta depois). 1 = cancelado.
         public static int Desinstalar()
         {
-            if (MessageBox.Show("Desinstalar o Pulso deste computador?\n\nA cápsula, o ícone da bandeja e o início com o Windows serão removidos.",
-                    "Desinstalar o Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 1;
+            if (MessageBox.Show("Desinstalar o Pulso deste computador?\n\nA cápsula, o ícone da bandeja e o início com o Windows serão removidos.".T(),
+                    "Desinstalar o Pulso".T(), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 1;
             FecharAberto();
             Integracao.IniciarComWindows(false);
             try { if (Integracao.BarraInstalada()) Integracao.RemoverBarra(); } catch { }
             try { if (File.Exists(Atalho)) File.Delete(Atalho); } catch { }
             try { Registry.CurrentUser.DeleteSubKeyTree(ChaveApp, false); } catch { }
             if (Directory.Exists(Caminhos.Dados) &&
-                MessageBox.Show("Apagar também as suas configurações e o histórico do Pulso?\n\n" + Caminhos.Dados +
-                    "\n\nEscolha Não para mantê-los, caso pretenda instalar de novo.",
-                    "Desinstalar o Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                MessageBox.Show("Apagar também as suas configurações e o histórico do Pulso?\n\n{0}\n\nEscolha Não para mantê-los, caso pretenda instalar de novo.".T(Caminhos.Dados),
+                    "Desinstalar o Pulso".T(), MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
                 try { Directory.Delete(Caminhos.Dados, true); } catch { }
             }
-            MessageBox.Show("O Pulso foi desinstalado.", "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("O Pulso foi desinstalado.".T(), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
 

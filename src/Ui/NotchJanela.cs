@@ -808,13 +808,13 @@ namespace Pulso
                 using (var ic = Glifos.Caminho(p.Id, x + 8 * sCartao, y + hTit / 2, 16 * sCartao))
                 using (var b = new SolidBrush(pal.Tinta2)) g.FillPath(b, ic);
                 Escrever(g, p.Nome, fTitulo, pal.Tinta, x + 24 * sCartao, y, w - 24 * sCartao, hTit, StringAlignment.Near);
-                if (p.Plano != null) Escrever(g, p.Plano, fPeq, pal.TintaFraca, x, y, w, hTit, StringAlignment.Far, fTitulo);
+                if (p.Plano != null) Escrever(g, p.Plano.T(), fPeq, pal.TintaFraca, x, y, w, hTit, StringAlignment.Far, fTitulo);
             }
             y += hTit + 4 * sCartao;
 
             if (p.Janelas.Count == 0)
             {
-                string msg = !p.Presente ? Util.Maiuscula(p.Ausencia) : p.Erro ?? p.Detalhe ?? (p.Id == "codex" ? "Use o Codex uma vez para aparecer o consumo." : "Aguardando a primeira leitura…");
+                string msg = !p.Presente ? Util.Maiuscula(p.Ausencia.T()) : p.Erro.T() ?? p.Detalhe.T() ?? (p.Id == "codex" ? "Use o Codex uma vez para aparecer o consumo.".T() : "Aguardando a primeira leitura…".T());
                 y += Paragrafo(med, g, msg, fNota, pal.Tinta3, x, y + 6 * sCartao, w, hNota) + 6 * sCartao;
             }
 
@@ -825,7 +825,7 @@ namespace Pulso
                 if (j.Grupo != null && j.Grupo != grupoAnterior)
                 {
                     y += 12 * sCartao;
-                    if (g != null) Escrever(g, j.Grupo, fGrupo, pal.Tinta2, x, y, w, 16 * sCartao, StringAlignment.Near);
+                    if (g != null) Escrever(g, j.Grupo.T(), fGrupo, pal.Tinta2, x, y, w, 16 * sCartao, StringAlignment.Near);
                     y += 16 * sCartao;
                     grupoAnterior = j.Grupo;
                 }
@@ -836,8 +836,8 @@ namespace Pulso
                     // Janela só de contagem: sem barra, sem limite publicado
                     if (g != null)
                     {
-                        Escrever(g, j.Rotulo, fRotulo, pal.Tinta2, x, y, w, hl, StringAlignment.Near);
-                        Escrever(g, j.Contagem.Value == 0 ? "nenhuma requisição hoje" : "~" + j.Contagem.Value + (j.Contagem.Value == 1 ? " requisição hoje" : " requisições hoje"), fPeq, pal.TintaFraca, x, y + hl + 4 * sCartao, w, 15 * sCartao, StringAlignment.Near);
+                        Escrever(g, j.Rotulo.T(), fRotulo, pal.Tinta2, x, y, w, hl, StringAlignment.Near);
+                        Escrever(g, j.Contagem.Value == 0 ? "nenhuma requisição hoje".T() : (j.Contagem.Value == 1 ? "~{0} requisição hoje" : "~{0} requisições hoje").T(j.Contagem.Value), fPeq, pal.TintaFraca, x, y + hl + 4 * sCartao, w, 15 * sCartao, StringAlignment.Near);
                     }
                     y += hl + 4 * sCartao + 15 * sCartao;
                     continue;
@@ -846,9 +846,10 @@ namespace Pulso
                 {
                     string rit = j.Id == "daily_pace" ? null : Ritmo.Texto(j);
                     var pts = Ritmo.Pontos(j);
+                    string rotulo = j.Rotulo.T();
                     float writ = rit != null ? TextoGdi.Medir(rit, fPeq).Width + 1 : 0;
-                    if (rit != null && TextoGdi.Medir(j.Rotulo, fRotulo).Width + writ + 10 * sCartao > w) { rit = null; writ = 0; }
-                    Escrever(g, j.Rotulo, fRotulo, pal.Tinta2, x, y, w - (writ > 0 ? writ + 10 * sCartao : 0), hl, StringAlignment.Near);
+                    if (rit != null && TextoGdi.Medir(rotulo, fRotulo).Width + writ + 10 * sCartao > w) { rit = null; writ = 0; }
+                    Escrever(g, rotulo, fRotulo, pal.Tinta2, x, y, w - (writ > 0 ? writ + 10 * sCartao : 0), hl, StringAlignment.Near);
                     if (rit != null) Escrever(g, rit, fPeq, pts > 0 ? pal.Atencao : pal.TintaFraca, x + w - writ, y, writ, hl, StringAlignment.Far, fRotulo);
                 }
                 y += hl + 6 * sCartao;
@@ -878,7 +879,7 @@ namespace Pulso
                     string rn = Texto.Renova(j.ResetaEm);
                     float wr = rn != null ? TextoGdi.Medir(rn, fPeq).Width + 1 : 0;
                     string uso = Texto.UsadoRestante(j.Atual, est2);
-                    if (TextoGdi.Medir(uso, fPeq).Width + wr + 8 * sCartao > w) uso = Texto.Pct(j.Atual, est2) + " usado";
+                    if (TextoGdi.Medir(uso, fPeq).Width + wr + 8 * sCartao > w) uso = "{0} usado".T(Texto.Pct(j.Atual, est2));
                     Escrever(g, uso, fPeq, pal.TintaFraca, x, y, w - wr - 8 * sCartao, hs, StringAlignment.Near);
                     if (rn != null) Escrever(g, rn, fPeq, pal.TintaFraca, x + w - wr, y, wr, hs, StringAlignment.Far);
                 }
@@ -889,10 +890,10 @@ namespace Pulso
             string ritmo = Texto.Ritmo(p.RitmoHora, p.Principal);
             if (ritmo != null) { y += 8 * sCartao; y += Paragrafo(med, g, ritmo, fPeq, pal.Tinta4, x, y, w); }
 
-            if (p.Detalhe != null && p.Janelas.Count > 0) { y += 8 * sCartao; y += Paragrafo(med, g, p.Detalhe, fNota, pal.Tinta3, x, y, w, hNota); }
+            if (p.Detalhe != null && p.Janelas.Count > 0) { y += 8 * sCartao; y += Paragrafo(med, g, p.Detalhe.T(), fNota, pal.Tinta3, x, y, w, hNota); }
             string frescor = Texto.Frescor(p);
             if (frescor != null) { y += 8 * sCartao; y += Paragrafo(med, g, frescor, fPeq, pal.TintaFraca, x, y, w); }
-            if (p.Nota != null && p.Janelas.Count > 0) { y += 4 * sCartao; y += Paragrafo(med, g, p.Nota, fNota, pal.Tinta3, x, y, w, hNota); }
+            if (p.Nota != null && p.Janelas.Count > 0) { y += 4 * sCartao; y += Paragrafo(med, g, p.Nota.T(), fNota, pal.Tinta3, x, y, w, hNota); }
 
             // De onde veio o uso da sessão de 5h (só o deste computador)
             var indice = Projetos.De(p.Id);
@@ -901,13 +902,13 @@ namespace Pulso
                 var js = p.Janelas.FirstOrDefault(v => v.Minutos == 300 && !v.Semanal);
                 var parcelas = indice.Parcelas(js != null && js.ResetaEm.HasValue ? js.ResetaEm.Value.AddMinutes(-300) : DateTime.UtcNow.AddHours(-5));
                 if (parcelas.Count > 4)
-                    parcelas = parcelas.Take(3).Concat(new[] { new KeyValuePair<string, double>("Outros", parcelas.Skip(3).Sum(kv => kv.Value)) }).ToList();
+                    parcelas = parcelas.Take(3).Concat(new[] { new KeyValuePair<string, double>("Outros".T(), parcelas.Skip(3).Sum(kv => kv.Value)) }).ToList();
                 if (parcelas.Count > 0)
                 {
                     y += 12 * sCartao;
                     if (g != null) using (var pen = new Pen(pal.CartaoRegra, 1 * sCartao)) g.DrawLine(pen, x, y, x + w, y);
                     y += 8 * sCartao;
-                    if (g != null) Escrever(g, "Por projeto nesta sessão", fRotulo, pal.Tinta2, x, y, w, 16 * sCartao, StringAlignment.Near);
+                    if (g != null) Escrever(g, "Por projeto nesta sessão".T(), fRotulo, pal.Tinta2, x, y, w, 16 * sCartao, StringAlignment.Near);
                     y += 16 * sCartao + 2 * sCartao;
                     foreach (var kv in parcelas)
                     {
@@ -916,7 +917,7 @@ namespace Pulso
                         {
                             string pct = kv.Value < 0.005 ? "<1%" : Math.Round(kv.Value * 100) + "%";
                             float wp = TextoGdi.Medir("100%", fPeq).Width + 2 * sCartao;
-                            Escrever(g, kv.Key, fPeq, pal.Tinta4, x, y, w - wp - 8 * sCartao, hlin, StringAlignment.Near);
+                            Escrever(g, kv.Key == "Sem pasta" ? "Sem pasta".T() : kv.Key, fPeq, pal.Tinta4, x, y, w - wp - 8 * sCartao, hlin, StringAlignment.Near);
                             Escrever(g, pct, fPeq, pal.TintaFraca, x + w - wp, y, wp, hlin, StringAlignment.Far);
                             float hb = 3 * sCartao, yb = y + hlin + 1 * sCartao;
                             using (var b = new SolidBrush(pal.Barra))
@@ -960,7 +961,7 @@ namespace Pulso
                 if (sessoes.Count > mostradas)
                 {
                     float hlin = 16 * sCartao;
-                    if (g != null) Escrever(g, "e mais " + (sessoes.Count - mostradas), fPeq, pal.TintaFraca, x + 12 * sCartao, y, w, hlin, StringAlignment.Near);
+                    if (g != null) Escrever(g, "e mais {0}".T(sessoes.Count - mostradas), fPeq, pal.TintaFraca, x + 12 * sCartao, y, w, hlin, StringAlignment.Near);
                     y += hlin;
                 }
             }

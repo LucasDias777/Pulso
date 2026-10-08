@@ -36,7 +36,7 @@ namespace Pulso
             if (k >= Keys.NumPad0 && k <= Keys.NumPad9) return "Num " + (int)(k - Keys.NumPad0);
             switch (k)
             {
-                case Keys.Space: return "Espaço";
+                case Keys.Space: return "Espaço".T();
                 case Keys.Return: return "Enter";
                 case Keys.Tab: return "Tab";
                 case Keys.Back: return "Backspace";

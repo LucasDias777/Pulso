@@ -131,7 +131,7 @@ namespace Pulso
                 if (plano != null) p.Plano = Rotulos.Plano(plano);
                 bool creditos = Json.Bool(rl, "credits", "has_credits") == true;
                 string saldo = Json.Str(rl, "credits", "balance");
-                p.Nota = creditos && saldo != null && saldo != "0" ? "Créditos: " + saldo : null;
+                p.Nota = creditos && saldo != null && saldo != "0" ? "Créditos: {0}".T(saldo) : null;
                 p.Confirmado = quando;
                 var principal = p.PorId("primary");
                 if (principal != null) p.RitmoHora = Ritmo.Registrar("codex", quando, principal.Usado);
@@ -167,7 +167,7 @@ namespace Pulso
         {
             if (minutos == 300) return "Sessão (5h)";
             if (minutos == 10080 || (semanal && minutos == 0)) return "Semana";
-            if (minutos > 0 && minutos % 1440 == 0) return (minutos / 1440) + " dias";
+            if (minutos > 0 && minutos % 1440 == 0) return "{0} dias".T(minutos / 1440);
             if (minutos > 0 && minutos % 60 == 0) return (minutos / 60) + "h";
             return minutos > 0 ? minutos + " min" : "Limite";
         }

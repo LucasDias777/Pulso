@@ -345,7 +345,7 @@ A pasta clonada do projeto não é tocada; apague-a à mão se não for reinstal
 |---|---|
 | **Contas** | Quais provedores têm anel (um provedor ativado entra no fim da cápsula), a estimativa ao vivo do Claude e a barra de status do Claude Code. Mostra o plano e a origem da última leitura de cada um |
 | **Aparência** | Exibição (sempre, ao passar o cursor ou oculto), cápsula adaptável, tamanho (o Pequeno encolhe só a cápsula e os anéis; o texto dos cartões fica como no Médio), tema, anel semanal (dentro, fora ou tracejado), ritmo do dia no Claude, consumo por projeto no cartão, borda, monitor, arrastável e os limites de cor (atenção e crítico, em degrau ou rampa) |
-| **Geral** | Abrir com o Windows, atalho global e gravação de uma combinação nova, cada tipo de aviso (inclusive o de ritmo), som, pré-visualização do cartão de aviso, atualizações, pasta de dados e desinstalar |
+| **Geral** | Idioma (português, inglês ou espanhol; vale na hora, sem reabrir), abrir com o Windows, atalho global e gravação de uma combinação nova, cada tipo de aviso (inclusive o de ritmo), som, pré-visualização do cartão de aviso, atualizações, pasta de dados e desinstalar |
 
 ## Desenvolvimento
 

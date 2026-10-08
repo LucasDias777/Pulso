@@ -61,15 +61,14 @@ namespace Pulso
                             string marca = chave + "|" + (j.ResetaEm.HasValue ? j.ResetaEm.Value.ToString("yyyyMMddHH") : "-") + "|" + lim;
                             if (uso < lim || antes.Uso >= lim || !avisados.Add(marca)) continue;
                             int pct = (int)Math.Round(Math.Min(1, uso) * 100);
-                            string ritmo = Texto.Ritmo(p.RitmoHora, j);
                             mostrar(new Aviso
                             {
                                 Provedor = p.Id,
-                                Titulo = lim >= 1 ? "Limite do " + p.Nome + " atingido" : p.Nome + " em " + pct + "%",
-                                Subtitulo = j.Rotulo,
-                                Status = lim >= 1 ? "Sem cota até renovar" : (100 - pct) + "% restante",
+                                Titulo = lim >= 1 ? "Limite do {0} atingido".T(p.Nome) : "{0} em {1}%".T(p.Nome, pct),
+                                Subtitulo = j.Rotulo.T(),
+                                Status = lim >= 1 ? "Sem cota até renovar".T() : "{0}% restante".T(100 - pct),
                                 CorStatus = lim >= 0.95 ? pal.Critico : pal.Atencao,
-                                Proxima = Juntar(Texto.Renova(j.ResetaEm), lim < 1 && ritmo != null && ritmo.Contains("esgota") ? ritmo.Substring(ritmo.IndexOf("esgota")) : null),
+                                Proxima = Juntar(Texto.Renova(j.ResetaEm), lim < 1 ? Texto.Esgota(p.RitmoHora, j) : null),
                                 Som = Som.Limite,
                             });
                         }
@@ -82,9 +81,9 @@ namespace Pulso
                             mostrar(new Aviso
                             {
                                 Provedor = p.Id,
-                                Titulo = p.Nome + " renovado",
-                                Subtitulo = j.Rotulo + " renovada",
-                                Status = "Cota disponível · " + (int)Math.Round(uso * 100) + "%",
+                                Titulo = "{0} renovado".T(p.Nome),
+                                Subtitulo = "{0} renovada".T(j.Rotulo.T()),
+                                Status = "Cota disponível · {0}%".T((int)Math.Round(uso * 100)),
                                 Proxima = j.ResetaEm.HasValue ? Texto.Renova(j.ResetaEm) : null,
                                 Som = Som.Renovacao,
                             });
@@ -116,11 +115,11 @@ namespace Pulso
             mostrar(new Aviso
             {
                 Provedor = p.Id,
-                Titulo = p.Nome + " em ritmo alto",
-                Subtitulo = j.Rotulo + " · " + Texto.Pct(atual, estimado) + " usado",
-                Status = "No ritmo atual, acaba às " + esgota.ToLocalTime().ToString("HH:mm"),
+                Titulo = "{0} em ritmo alto".T(p.Nome),
+                Subtitulo = "{0} · {1} usado".T(j.Rotulo.T(), Texto.Pct(atual, estimado)),
+                Status = "No ritmo atual, acaba às {0}".T(esgota.ToLocalTime().ToString("HH:mm")),
                 CorStatus = pal.Atencao,
-                Proxima = Tempo.Duracao(sobra) + " antes de renovar · +" + Math.Max(1, (int)Math.Round(p.RitmoHora.Value * 100)) + " pts/h",
+                Proxima = "{0} antes de renovar · +{1} pts/h".T(Tempo.Duracao(sobra), Math.Max(1, (int)Math.Round(p.RitmoHora.Value * 100))),
                 Som = Som.Limite,
             });
         }
@@ -149,18 +148,18 @@ namespace Pulso
                     if (dur.TotalSeconds < 10 || EmFoco(s.Pasta)) continue;
                     mostrar(new Aviso
                     {
-                        Provedor = p.Id, Titulo = p.Nome + " terminou", Subtitulo = s.Titulo,
-                        Status = "Concluída em " + Tempo.Duracao(dur),
-                        Proxima = "Clique para abrir a janela", Som = Som.Concluida, Clique = irPara,
+                        Provedor = p.Id, Titulo = "{0} terminou".T(p.Nome), Subtitulo = s.Titulo,
+                        Status = "Concluída em {0}".T(Tempo.Duracao(dur)),
+                        Proxima = "Clique para abrir a janela".T(), Som = Som.Concluida, Clique = irPara,
                     });
                 }
                 else if (s.Estado == Atividade.Aguardando && cfg.AvisoSessaoEspera && !EmFoco(s.Pasta))
                 {
                     mostrar(new Aviso
                     {
-                        Provedor = p.Id, Titulo = p.Nome + " está esperando você", Subtitulo = s.Titulo,
-                        Status = "Precisa da sua resposta", CorStatus = pal.Atencao,
-                        Proxima = "Clique para abrir a janela", Som = Som.Esperando, Clique = irPara,
+                        Provedor = p.Id, Titulo = "{0} está esperando você".T(p.Nome), Subtitulo = s.Titulo,
+                        Status = "Precisa da sua resposta".T(), CorStatus = pal.Atencao,
+                        Proxima = "Clique para abrir a janela".T(), Som = Som.Esperando, Clique = irPara,
                     });
                 }
             }
@@ -188,8 +187,8 @@ namespace Pulso
         {
             return new Aviso
             {
-                Provedor = "codex", Titulo = "Codex renovado", Subtitulo = "Sessão (5h) renovada",
-                Status = "Cota disponível · 0%", Proxima = "renova às " + DateTime.Now.AddHours(5).ToString("HH:mm"), Som = Som.Renovacao,
+                Provedor = "codex", Titulo = "{0} renovado".T("Codex"), Subtitulo = "{0} renovada".T("Sessão (5h)".T()),
+                Status = "Cota disponível · {0}%".T(0), Proxima = "renova às {0}".T(DateTime.Now.AddHours(5).ToString("HH:mm")), Som = Som.Renovacao,
             };
         }
     }

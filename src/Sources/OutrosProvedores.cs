@@ -239,7 +239,7 @@ namespace Pulso
             double? lim = Json.Num(od, "limit"), us = Json.Num(od, "used");
             if (Json.Bool(od, "enabled") == true && lim > 0 && us.HasValue) l.Janelas.Add(Util.J("on_demand", "Sob demanda", us.Value / lim.Value, reset));
             if (l.Janelas.Count == 0)
-                l.Detalhe = Json.Bool(o, "isUnlimited") == true ? "Ilimitado no plano " + (plano ?? "atual") + " — nada para medir" : "O plano " + (plano ?? "atual") + " ainda não tem nada para medir";
+                l.Detalhe = Json.Bool(o, "isUnlimited") == true ? "Ilimitado no plano {0} — nada para medir".T(plano ?? "atual".T()) : "O plano {0} ainda não tem nada para medir".T(plano ?? "atual".T());
             return l;
         }
     }
@@ -341,7 +341,7 @@ namespace Pulso
             var o = Json.Parse(Enviar(req));
             double codigo = Json.Num(o, "code") ?? 0;
             if (codigo == 401 || codigo == 403) throw new SemLeitura("O z.ai recusou a chave — renove-a na ferramenta que a guarda", TimeSpan.FromMinutes(10), true);
-            if (Json.Bool(o, "success") == false && codigo != 200) throw new SemLeitura("O monitor do z.ai recusou o pedido (" + codigo + ")");
+            if (Json.Bool(o, "success") == false && codigo != 200) throw new SemLeitura("O monitor do z.ai recusou o pedido ({0})".T(codigo));
             var l = new Leitura { Fonte = fonte, Plano = Util.Maiuscula(Json.Str(o, "data", "level")) };
             foreach (var w in Json.Arr(o, "data", "limits") ?? new object[0])
             {
@@ -354,7 +354,7 @@ namespace Pulso
                 if (tipo == "TIME_LIMIT") { id = "mcp"; rot = "MCP (1 mês)"; }
                 else if (unidade == 3 && n == 5) { id = "session"; rot = "Sessão (5h)"; min = 300; }
                 else if (unidade == 6 && n == 1) { id = "weekly"; rot = "Semana"; min = 10080; }
-                else if (unidade > 0) { id = "window-" + unidade + "x" + n; rot = unidade == 3 ? "Uso (" + n + " h)" : unidade == 6 ? "Uso (" + n + " sem)" : "Uso"; }
+                else if (unidade > 0) { id = "window-" + unidade + "x" + n; rot = unidade == 3 ? "Uso ({0} h)".T(n) : unidade == 6 ? "Uso ({0} sem)".T(n) : "Uso"; }
                 else { id = (tipo ?? "unknown").ToLowerInvariant(); rot = "Uso"; }
                 double? prox = Json.Num(w, "nextResetTime");
                 l.Janelas.Add(Util.J(id, rot, pct.Value / 100, prox.HasValue ? Tempo.DeUnixMs((long)prox.Value) : (DateTime?)null, min, id == "weekly"));

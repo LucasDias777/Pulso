@@ -44,6 +44,7 @@ namespace Pulso
         public bool AnelTracejado;             // anel semanal tracejado
         public bool CapsulaAdaptavel;          // cápsula recolhida muda de cor conforme o fundo
         public bool Arrastavel;                // pontinhos/engrenagem/Alt movem o notch; desligado, fica fixo no meio da borda
+        public string Idioma = "pt";           // pt | en | es (Idioma.Codigos)
 
         public static Config Atual = new Config();
 
@@ -99,6 +100,7 @@ namespace Pulso
                     c.AnelTracejado = Json.Bool(o, "anelTracejado") ?? c.AnelTracejado;
                     c.CapsulaAdaptavel = Json.Bool(o, "capsulaAdaptavel") ?? c.CapsulaAdaptavel;
                     c.Arrastavel = Json.Bool(o, "arrastavel") ?? c.Arrastavel;
+                    c.Idioma = Json.Str(o, "idioma") ?? c.Idioma;
                 }
             }
             catch (Exception e) { Log.Erro("ler config", e); }
@@ -145,6 +147,7 @@ namespace Pulso
                     { "anelTracejado", AnelTracejado },
                     { "capsulaAdaptavel", CapsulaAdaptavel },
                     { "arrastavel", Arrastavel },
+                    { "idioma", Idioma },
                 };
                 Caminhos.GravarAtomico(Caminhos.Config, Json.Write(o));
             }
