@@ -995,7 +995,7 @@ namespace Pulso
             l.Add(I("Versão".T(), new Valor { Texto = Instalacao.Versao }));
             if (Instalacao.Origem == null)
             {
-                l.Add(L("Para receber atualizações por aqui, instale o Pulso pelo instalar.cmd da pasta do projeto clonada do GitHub.".T()));
+                l.Add(L("Instalado pelo download: para atualizar, baixe a versão nova pelo botão Baixar o Pulso do repositório e abra o Pulso.exe.".T()));
                 return l;
             }
             var st = Atualizacao.Estado;

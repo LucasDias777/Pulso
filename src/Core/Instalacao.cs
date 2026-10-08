@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -14,9 +15,9 @@ using Microsoft.Win32;
 
 namespace Pulso
 {
-    // Instalação como um app comum, sem administrador: o instalar.cmd compila e copia o Pulso.exe para
-    // %LOCALAPPDATA%\Programs\Pulso; daí o "--registrar" cria o atalho no Menu Iniciar e a entrada em
-    // Configurações › Aplicativos (Desinstalar chama o desinstalar.cmd da pasta instalada).
+    // Instalação como um app comum, sem administrador, em %LOCALAPPDATA%\Programs\Pulso: pelo instalar.cmd (que compila
+    // o projeto clonado e copia) ou pelo próprio Pulso.exe baixado das Releases do repositório, que se copia para lá.
+    // Daí o "--registrar" cria o atalho no Menu Iniciar e a entrada em Configurações › Aplicativos (Desinstalar chama o desinstalar.cmd).
     static class Instalacao
     {
         public const string Versao = "1.1";
@@ -41,17 +42,72 @@ namespace Pulso
         // Início com o Windows e barra de status apontam sempre para o Pulso instalado, mesmo se outro for aberto
         public static string ExeOficial { get { return Instalado ? ExeInstalado : Application.ExecutablePath; } }
 
-        // Pasta do repositório (a que tem o build.cmd), de onde vêm as atualizações
+        // Pasta do repositório (a que tem o build.cmd), de onde vêm as atualizações; nula = instalado pelo download
         public static string Origem
         {
             get
             {
                 string o = null;
                 try { using (var k = Registry.CurrentUser.OpenSubKey(ChaveApp)) if (k != null) o = k.GetValue("PulsoOrigem") as string; } catch { }
-                if (o == null) o = Path.GetDirectoryName(Path.GetDirectoryName(Application.ExecutablePath)); // rodando de <repo>\bin
+                if (o == null) o = PastaDoProjeto;
                 return o != null && File.Exists(Path.Combine(o, "build.cmd")) ? o : null;
             }
         }
+
+        // Rodando de <repo>\bin, compilado pelo build.cmd (desenvolvimento)
+        static string PastaDoProjeto
+        {
+            get
+            {
+                string o = Path.GetDirectoryName(Path.GetDirectoryName(Application.ExecutablePath));
+                return o != null && File.Exists(Path.Combine(o, "build.cmd")) ? o : null;
+            }
+        }
+
+        // Pulso.exe baixado e aberto de outra pasta (Downloads…): instala antes de rodar, em vez de rodar dali
+        public static bool PrecisaInstalar
+        {
+            get { return PastaDoProjeto == null && !string.Equals(Path.GetFullPath(Application.ExecutablePath), Path.GetFullPath(ExeInstalado), StringComparison.OrdinalIgnoreCase); }
+        }
+
+        // Pulso.exe baixado: pergunta, fecha o Pulso aberto, copia para a pasta de programas do usuário, registra pelo
+        // próprio instalado (como o instalar.cmd) e o abre. Recusar não instala nada.
+        public static int InstalarDaqui()
+        {
+            string pergunta = File.Exists(ExeInstalado) ? "Atualizar o Pulso instalado com esta versão?".T()
+                : "Instalar o Pulso neste computador?\n\nEle fica no Menu Iniciar e em Configurações › Aplicativos do Windows, abre junto com o Windows e pode ser desinstalado por lá.".T();
+            if (MessageBox.Show(pergunta, "Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 0;
+            try
+            {
+                FecharAberto();
+                Directory.CreateDirectory(Pasta);
+                Copiar(Application.ExecutablePath, ExeInstalado);
+                using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, "--registrar") { UseShellExecute = false }))
+                    if (!p.WaitForExit(60000) || p.ExitCode != 0) return 1;
+                Process.Start(new ProcessStartInfo(ExeInstalado) { UseShellExecute = false, WorkingDirectory = Pasta });
+                return 0;
+            }
+            catch (Exception e)
+            {
+                Log.Erro("instalar pelo download", e);
+                MessageBox.Show("Não foi possível concluir a instalação do Pulso:\n\n{0}".T(e.Message), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 1;
+            }
+        }
+
+        // Cópia com algumas tentativas (o Pulso que acabou de fechar pode segurar o arquivo por um instante), sem a marca
+        // de "baixado da internet": quem instala já confirmou o aviso do Windows ao abrir o download
+        static void Copiar(string de, string para)
+        {
+            for (int i = 0; ; i++)
+            {
+                try { File.Copy(de, para, true); break; }
+                catch (IOException) { if (i >= 20) throw; Thread.Sleep(250); }
+                catch (UnauthorizedAccessException) { if (i >= 20) throw; Thread.Sleep(250); }
+            }
+            DeleteFile(para + ":Zone.Identifier");
+        }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool DeleteFile(string nome);
 
         // --registrar <origem>: roda já da pasta instalada, logo depois da cópia
         public static int Registrar(string origem)

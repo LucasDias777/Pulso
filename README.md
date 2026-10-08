@@ -32,6 +32,10 @@
 
 <br/>
 
+<a href="https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe"><img alt="Baixar o Pulso" src="https://img.shields.io/badge/Baixar_o_Pulso-Windows_10_|_11-00c46a?style=for-the-badge&logo=windows&logoColor=white" height="40" /></a>
+
+<br/><br/>
+
 <table>
   <tr>
     <td align="center"><img src="docs/imagens/cartao-claude.png" alt="Cartão do Claude ao passar o cursor" width="340" /></td>
@@ -200,7 +204,19 @@ Pulso/
 
 O Pulso roda em qualquer computador com **Windows 10 ou 11** e se instala como um app comum, só para o seu usuário, sem permissão de administrador. Cada computador mantém as próprias configurações em `%APPDATA%\Pulso`.
 
-### Pré-requisitos
+### Pelo download
+
+1. Clique em **[Baixar o Pulso](https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe)** e abra o `Pulso.exe` baixado.
+2. Se o Windows avisar que protegeu o computador (o Pulso não tem assinatura digital), clique em **Mais informações** › **Executar assim mesmo**.
+3. Confirme **Instalar o Pulso neste computador?**: ele se copia para a pasta de programas do usuário, entra no Menu Iniciar e em Aplicativos do Windows e abre.
+
+O exe vem das Releases deste repositório, que é privado: o botão só baixa com a conta do GitHub logada no navegador.
+
+### Pelo projeto (desenvolvimento)
+
+Compila no próprio computador e atualiza pelo Git.
+
+#### Pré-requisitos
 
 | Item | Versão | Obrigatório? | Download oficial | Observação |
 |---|---:|---|---|---|
@@ -209,7 +225,7 @@ O Pulso roda em qualquer computador com **Windows 10 ou 11** e se instala como u
 | **Git** | Atual | Sim | [Baixar Git](https://git-scm.com/downloads) | Para baixar o projeto e receber as atualizações |
 | **Claude Code** e/ou **Codex** | Atual | Para ter leituras | [Claude Code](https://claude.com/claude-code) · [Codex](https://developers.openai.com/codex) | Instalados e logados nesse computador: o Pulso lê o que eles gravam |
 
-### Passo a passo
+#### Passo a passo
 
 ```bat
 :: Baixar o projeto (é privado: entre na sua conta do GitHub quando o Git pedir)
@@ -227,7 +243,8 @@ Também dá para dar dois cliques no `instalar.cmd`. Rodá-lo de novo reinstala 
 
 ## Atualização
 
-O Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas. Quando há uma, aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja: ele baixa, compila e reabre o Pulso em alguns segundos, mantendo as configurações. Na primeira vez em cada computador, clique em **Procurar atualização** para o Git pedir o login do GitHub uma vez; a procura automática nunca abre janela.
+- **Instalado pelo projeto**: o Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas. Quando há uma, aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja: ele baixa, compila e reabre o Pulso em alguns segundos, mantendo as configurações. Na primeira vez em cada computador, clique em **Procurar atualização** para o Git pedir o login do GitHub uma vez; a procura automática nunca abre janela.
+- **Instalado pelo download**: baixe de novo pelo botão **Baixar o Pulso** e abra o `Pulso.exe`; ele pergunta se atualiza o Pulso instalado e mantém as configurações.
 
 ## Desinstalação
 
@@ -277,6 +294,14 @@ bin\Pulso.exe
 ```
 
 Para levar a mudança para a versão instalada, rode o `instalar.cmd`. O `build.cmd` grava o commit atual na compilação, e é por ele que a procura de atualização compara a versão instalada com o GitHub.
+
+Para publicar a versão do botão de download (depois do commit e do push), com um token que possa criar releases neste repositório:
+
+```powershell
+$env:GH_TOKEN = "<token>"; tools\publicar.ps1
+```
+
+Ele compila o commit atual e cria a release `<versão>-<commit>` com o `Pulso.exe`.
 
 ## Diagnóstico e linha de comando
 

@@ -18,6 +18,10 @@ namespace Pulso
               "Also delete your Pulso settings and history?\n\n{0}\n\nChoose No to keep them if you plan to install it again.",
               "¿Borrar también tu configuración y el historial de Pulso?\n\n{0}\n\nElige No para conservarlos si piensas volver a instalarlo." },
             { "O Pulso foi desinstalado.", "Pulso has been uninstalled.", "Pulso se ha desinstalado." },
+            { "Atualizar o Pulso instalado com esta versão?", "Update the installed Pulso to this version?", "¿Actualizar el Pulso instalado con esta versión?" },
+            { "Instalar o Pulso neste computador?\n\nEle fica no Menu Iniciar e em Configurações › Aplicativos do Windows, abre junto com o Windows e pode ser desinstalado por lá.",
+              "Install Pulso on this computer?\n\nIt goes in the Start menu and in Settings › Windows Apps, starts with Windows and can be uninstalled from there.",
+              "¿Instalar Pulso en este equipo?\n\nQueda en el menú Inicio y en Configuración › Aplicaciones de Windows, se abre al iniciar Windows y se puede desinstalar desde allí." },
 
             // Procura de atualização (Configurações)
             { "1 mudança nova", "1 new change", "1 cambio nuevo" },

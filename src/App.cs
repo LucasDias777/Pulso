@@ -56,6 +56,13 @@ namespace Pulso
                 Config.Carregar(); // idioma das mensagens
                 Environment.Exit(args[0] == "--registrar" ? Instalacao.Registrar(args.Length > 1 ? args[1] : null) : Instalacao.Desinstalar());
             }
+            // Pulso.exe baixado das Releases e aberto de outra pasta: instala (perguntando antes) em vez de rodar dali
+            if (args.Length == 0 && Instalacao.PrecisaInstalar)
+            {
+                Application.EnableVisualStyles();
+                Config.Carregar();
+                Environment.Exit(Instalacao.InstalarDaqui());
+            }
 
             bool novo;
             using (var unica = new Mutex(true, @"Local\Pulso", out novo))

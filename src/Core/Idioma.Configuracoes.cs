@@ -144,7 +144,7 @@ namespace Pulso
 
             // Atualizações
             { "Versão", "Version", "Versión" },
-            { "Para receber atualizações por aqui, instale o Pulso pelo instalar.cmd da pasta do projeto clonada do GitHub.", "To get updates here, install Pulso with instalar.cmd from the project folder cloned from GitHub.", "Para recibir actualizaciones aquí, instala Pulso con el instalar.cmd de la carpeta del proyecto clonada de GitHub." },
+            { "Instalado pelo download: para atualizar, baixe a versão nova pelo botão Baixar o Pulso do repositório e abra o Pulso.exe.", "Installed from the download: to update, download the new version with the Download Pulso button in the repository and open Pulso.exe.", "Instalado desde la descarga: para actualizar, descarga la versión nueva con el botón Descargar Pulso del repositorio y abre Pulso.exe." },
             { "Instalar atualização", "Install update", "Instalar actualización" },
             { "Procurando…", "Checking…", "Buscando…" },
             { "Procurar atualização", "Check for updates", "Buscar actualizaciones" },
