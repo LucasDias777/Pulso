@@ -32,7 +32,7 @@
 
 <br/>
 
-<a href="https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe"><img alt="Baixar o Pulso" src="https://img.shields.io/badge/Baixar_o_Pulso-Windows_10_|_11-00c46a?style=for-the-badge&logo=windows&logoColor=white" height="40" /></a>
+<a href="https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe"><img alt="Instalar Pulso" src="https://img.shields.io/badge/INSTALAR_PULSO-00c46a?style=for-the-badge&logo=windows&logoColor=white" height="64" /></a>
 
 <br/><br/>
 
@@ -206,7 +206,7 @@ O Pulso roda em qualquer computador com **Windows 10 ou 11** e se instala como u
 
 ### Pelo download
 
-1. Clique em **[Baixar o Pulso](https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe)** e abra o `Pulso.exe` baixado.
+1. Clique em **[Instalar Pulso](https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe)** e abra o `Pulso.exe` baixado.
 2. Se o Windows avisar que protegeu o computador (o Pulso não tem assinatura digital), clique em **Mais informações** › **Executar assim mesmo**.
 3. Confirme **Instalar o Pulso neste computador?**: ele se copia para a pasta de programas do usuário, entra no Menu Iniciar e em Aplicativos do Windows e abre.
 
@@ -244,7 +244,7 @@ Também dá para dar dois cliques no `instalar.cmd`. Rodá-lo de novo reinstala 
 ## Atualização
 
 - **Instalado pelo projeto**: o Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas. Quando há uma, aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja: ele baixa, compila e reabre o Pulso em alguns segundos, mantendo as configurações. Na primeira vez em cada computador, clique em **Procurar atualização** para o Git pedir o login do GitHub uma vez; a procura automática nunca abre janela.
-- **Instalado pelo download**: baixe de novo pelo botão **Baixar o Pulso** e abra o `Pulso.exe`; ele pergunta se atualiza o Pulso instalado e mantém as configurações.
+- **Instalado pelo download**: baixe de novo pelo botão **Instalar Pulso** e abra o `Pulso.exe`; ele pergunta se atualiza o Pulso instalado e mantém as configurações.
 
 ## Desinstalação
 

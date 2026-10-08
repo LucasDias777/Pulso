@@ -144,7 +144,7 @@ namespace Pulso
 
             // Atualizações
             { "Versão", "Version", "Versión" },
-            { "Instalado pelo download: para atualizar, baixe a versão nova pelo botão Baixar o Pulso do repositório e abra o Pulso.exe.", "Installed from the download: to update, download the new version with the Download Pulso button in the repository and open Pulso.exe.", "Instalado desde la descarga: para actualizar, descarga la versión nueva con el botón Descargar Pulso del repositorio y abre Pulso.exe." },
+            { "Instalado pelo download: para atualizar, baixe a versão nova pelo botão Instalar Pulso do repositório e abra o Pulso.exe.", "Installed from the download: to update, download the new version with the Install Pulso button in the repository and open Pulso.exe.", "Instalado desde la descarga: para actualizar, descarga la versión nueva con el botón Instalar Pulso del repositorio y abre Pulso.exe." },
             { "Instalar atualização", "Install update", "Instalar actualización" },
             { "Procurando…", "Checking…", "Buscando…" },
             { "Procurar atualização", "Check for updates", "Buscar actualizaciones" },
