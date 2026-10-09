@@ -188,8 +188,7 @@ namespace Pulso
                     if (tipo == null || !pct.HasValue) continue;
                     string id = Normalizar(tipo);
                     var j = Nova(id, pct.Value, Json.Data(l, "resets_at"));
-                    // A janela semanal de um modelo vem como weekly_scoped; qual modelo, só o scope diz (o servidor responde em snake_case)
-                    string modelo = Json.Str(l, "scope", "model", "display_name") ?? Json.Str(l, "scope", "model", "displayName");
+                    string modelo = Json.Str(l, "scope", "model", "displayName");
                     if (modelo != null && id != "session" && id != "weekly_all") j.Rotulo = "Semana ({0})".T(modelo);
                     if (!r.ContainsKey(id)) r[id] = j;
                 }
