@@ -95,6 +95,7 @@ namespace Pulso
         float E(float v) { return v * k; }
         int aba;
         float rolagem, alturaConteudo;
+        bool rolarAoFim;   // MostrarAtualizacoes: a altura do conteúdo só é conhecida ao desenhar
         Cores c;
         readonly Tx.Estilo corpo, forte, titulo, peq, ctl, marca;
         readonly Timer relogio = new Timer { Interval = 250 };
@@ -186,8 +187,8 @@ namespace Pulso
         }
 
         public void MostrarAba(int i) { aba = i; rolagem = 0; Invalidate(); }
-        // A seção Atualizações fica no fim da aba Geral: rola até o fim (a pintura limita à rolagem máxima)
-        public void MostrarAtualizacoes() { aba = 2; rolagem = float.MaxValue; Invalidate(); }
+        // A seção Atualizações fica no fim da aba Geral: o desenho rola até o fim
+        public void MostrarAtualizacoes() { aba = 2; rolagem = 0; rolarAoFim = true; Invalidate(); }
 
         void Salvou()
         {
@@ -227,6 +228,7 @@ namespace Pulso
             g.Restore(est);
             // O conteúdo encolheu (outro período nos Relatórios): a rolagem volta para dentro dele
             float maxRolagem = Math.Max(0, alturaConteudo - corpoR.Height);
+            if (rolarAoFim) { rolarAoFim = false; rolagem = maxRolagem; Invalidate(); }
             if (rolagem > maxRolagem) { rolagem = maxRolagem; Invalidate(); }
 
             DesenharToast(g);
