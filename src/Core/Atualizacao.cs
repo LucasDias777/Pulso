@@ -208,7 +208,7 @@ namespace Pulso
             Log.Info("atualização: não consultou as Releases (HTTP " + status + ")");
             Definir(Situacao.Erro, () =>
                 status == 0 ? "Sem conexão com o GitHub.".T() :
-                status == -1 ? "O GitHub demorou demais para responder.".T() :
+                status == -1 ? "O GitHub demorou demais para responder. Tente novamente mais tarde.".T() :
                 status == 403 || status == 429 ? "O GitHub limitou as consultas. Tente de novo mais tarde.".T() :
                 status == 404 ? "Nenhuma versão publicada no GitHub.".T() :
                 "Não foi possível consultar o GitHub.".T());
@@ -248,7 +248,7 @@ namespace Pulso
                 {
                     var saida = p.StandardOutput.ReadToEndAsync();
                     var falha = p.StandardError.ReadToEndAsync();
-                    if (!p.WaitForExit(interativo ? 180000 : 60000)) { try { p.Kill(); } catch { } erro = "O GitHub demorou demais para responder."; return null; }
+                    if (!p.WaitForExit(interativo ? 180000 : 60000)) { try { p.Kill(); } catch { } erro = "O GitHub demorou demais para responder. Tente novamente mais tarde."; return null; }
                     erro = falha.Result;
                     return p.ExitCode == 0 ? saida.Result : null;
                 }
