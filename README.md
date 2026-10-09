@@ -182,10 +182,10 @@ Medido com o Pulso aberto, o Claude trabalhando e o indicador de atividade anima
 
 | | Pulso |
 |---|---|
-| Memória em uso | ~68 MB (44 MB próprios) |
-| CPU | ~0,2% |
-| Programa no disco | 296 KB |
-| Dados salvos | ~0,1 MB |
+| Memória em uso | ~64 MB (41 MB próprios) |
+| CPU | ~0,4% |
+| Programa no disco | 429 KB |
+| Dados salvos | ~0,3 MB |
 
 A cápsula só redesenha quando algo muda: 60 quadros por segundo durante a animação de abrir, 10 por segundo com um agente trabalhando e nenhum quando está tudo parado.
 
@@ -220,7 +220,7 @@ O exe vem das [Releases](https://github.com/LucasDias777/Pulso/releases) deste r
 
 O Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas, e também pelo botão **Procurar atualização** em Configurações › Geral. Ele compara a versão instalada com a última [Release](https://github.com/LucasDias777/Pulso/releases) deste repositório, que é público: não precisa de login nem de conta no GitHub.
 
-Quando há versão nova, aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja. O Pulso baixa o `Pulso.exe` novo, confere o tamanho e o SHA-256 que o GitHub publica, troca pelo instalado e reabre em alguns segundos. As configurações e o histórico ficam.
+Quando a procura automática acha versão nova, o Pulso avisa com uma notificação do Windows (clicar nela abre as Configurações na seção Atualizações), e aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja. Ao instalar, ele baixa o `Pulso.exe` novo, confere o tamanho e o SHA-256 que o GitHub publica, troca pelo instalado e reabre em alguns segundos. As configurações e o histórico ficam.
 
 Baixar de novo pelo botão **Instalar Pulso** e abrir o `Pulso.exe` também atualiza: ele pergunta se substitui o Pulso instalado.
 
