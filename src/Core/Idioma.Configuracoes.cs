@@ -145,11 +145,13 @@ namespace Pulso
 
             // Atualizações
             { "Versão", "Version", "Versión" },
-            { "Instalado pelo download: para atualizar, baixe a versão nova pelo botão Instalar Pulso do repositório e abra o Pulso.exe.", "Installed from the download: to update, download the new version with the Install Pulso button in the repository and open Pulso.exe.", "Instalado desde la descarga: para actualizar, descarga la versión nueva con el botón Instalar Pulso del repositorio y abre Pulso.exe." },
             { "Instalar atualização", "Install update", "Instalar actualización" },
             { "Procurando…", "Checking…", "Buscando…" },
+            { "Instalando…", "Installing…", "Instalando…" },
             { "Procurar atualização", "Check for updates", "Buscar actualizaciones" },
             { "Versão nova no GitHub ({0}). Instalar atualização baixa, compila e reabre o Pulso em alguns segundos.", "New version on GitHub ({0}). Install update downloads, builds and reopens Pulso in a few seconds.", "Nueva versión en GitHub ({0}). Instalar actualización descarga, compila y reabre Pulso en unos segundos." },
+            { "Versão nova no GitHub ({0}). Instalar atualização baixa e reabre o Pulso em alguns segundos.", "New version on GitHub ({0}). Install update downloads it and reopens Pulso in a few seconds.", "Nueva versión en GitHub ({0}). Instalar actualización la descarga y reabre Pulso en unos segundos." },
+            { "Baixando a versão nova…", "Downloading the new version…", "Descargando la versión nueva…" },
             { "Você está com a versão mais recente.", "You're on the latest version.", "Tienes la versión más reciente." },
             { "Consultando o GitHub…", "Checking GitHub…", "Consultando GitHub…" },
             { "O Pulso procura sozinho 2 minutos depois de abrir e a cada 12 horas, sem interromper você.", "Pulso checks on its own 2 minutes after opening and every 12 hours, without interrupting you.", "Pulso busca solo 2 minutos después de abrirse y cada 12 horas, sin interrumpirte." },

@@ -1009,24 +1009,24 @@ namespace Pulso
         {
             var l = new List<Linha>();
             l.Add(I("Versão".T(), new Valor { Texto = Instalacao.Versao }));
-            if (Instalacao.Origem == null)
-            {
-                l.Add(L("Instalado pelo download: para atualizar, baixe a versão nova pelo botão Instalar Pulso do repositório e abra o Pulso.exe.".T()));
-                return l;
-            }
             var st = Atualizacao.Estado;
             var botoes = new List<Botao>();
             if (st == Atualizacao.Situacao.Disponivel) botoes.Add(NovoBotao("atualizar", "Instalar atualização".T(), Atualizacao.Aplicar));
+            bool ocupado = st == Atualizacao.Situacao.Procurando || st == Atualizacao.Situacao.Baixando;
             botoes.Add(new Botao
             {
-                Id = "procurar", Texto = st == Atualizacao.Situacao.Procurando ? "Procurando…".T() : "Procurar atualização".T(),
-                Desativado = st == Atualizacao.Situacao.Procurando, Clique = delegate { Atualizacao.Procurar(true); },
+                Id = "procurar", Texto = st == Atualizacao.Situacao.Procurando ? "Procurando…".T() : st == Atualizacao.Situacao.Baixando ? "Instalando…".T() : "Procurar atualização".T(),
+                Desativado = ocupado, Clique = delegate { Atualizacao.Procurar(true); },
             });
             l.Add(I("", new Botoes { Itens = botoes }));
             string texto;
             switch (st)
             {
-                case Atualizacao.Situacao.Disponivel: texto = "Versão nova no GitHub ({0}). Instalar atualização baixa, compila e reabre o Pulso em alguns segundos.".T(Atualizacao.Detalhe.T()); break;
+                case Atualizacao.Situacao.Disponivel:
+                    texto = (Atualizacao.PeloDownload ? "Versão nova no GitHub ({0}). Instalar atualização baixa e reabre o Pulso em alguns segundos."
+                        : "Versão nova no GitHub ({0}). Instalar atualização baixa, compila e reabre o Pulso em alguns segundos.").T(Atualizacao.Detalhe.T());
+                    break;
+                case Atualizacao.Situacao.Baixando: texto = "Baixando a versão nova…".T(); break;
                 case Atualizacao.Situacao.EmDia: texto = "Você está com a versão mais recente.".T(); break;
                 case Atualizacao.Situacao.Erro: texto = Atualizacao.Detalhe.T(); break;
                 case Atualizacao.Situacao.Procurando: texto = "Consultando o GitHub…".T(); break;

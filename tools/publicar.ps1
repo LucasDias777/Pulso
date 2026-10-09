@@ -1,6 +1,6 @@
-﻿# Publica a versão atual nas Releases deste repositório (privado), de onde vem o botão "Instalar Pulso" do README.
-# Compila o commit atual (precisa estar no GitHub e sem mudanças pendentes) e anexa o bin\Pulso.exe a uma release
-# com a tag "<versão>-<commit>". Baixar exige estar logado no GitHub com acesso ao repositório.
+﻿# Publica a versão atual nas Releases deste repositório, de onde vêm o botão "Instalar Pulso" do README e a
+# atualização de quem instalou por ele. Compila o commit atual (precisa estar no GitHub e sem mudanças pendentes) e
+# anexa o bin\Pulso.exe a uma release com a tag "<versão>-<commit>".
 # Uso (o token fica só na variável de ambiente): $env:GH_TOKEN = "<token com acesso ao repositório>"; tools\publicar.ps1
 param([string]$Repo = "LucasDias777/Pulso")
 $ErrorActionPreference = "Stop"

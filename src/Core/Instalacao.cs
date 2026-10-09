@@ -232,6 +232,45 @@ namespace Pulso
             catch (Exception e) { Log.Erro("abrir desinstalador", e); }
         }
 
+        // Atualização pelo download: o Pulso aberto troca o próprio exe (o Windows deixa renomear um exe em uso, não
+        // apagar), registra a versão nova como o instalar.cmd e a abre; ela espera este fechar e apaga o antigo.
+        // Se algo falhar antes de abrir, o exe antigo volta para o lugar.
+        public static void TrocarPor(string novo)
+        {
+            string velho = ExeInstalado + ".old";
+            if (File.Exists(velho)) File.Delete(velho);
+            File.Move(ExeInstalado, velho);
+            try
+            {
+                File.Move(novo, ExeInstalado);
+                using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, "--registrar") { UseShellExecute = false }))
+                    if (!p.WaitForExit(60000) || p.ExitCode != 0) throw new InvalidOperationException("--registrar");
+                Process.Start(new ProcessStartInfo(ExeInstalado, "--apos-atualizar " + Process.GetCurrentProcess().Id) { UseShellExecute = false, WorkingDirectory = Pasta });
+            }
+            catch
+            {
+                try { if (File.Exists(ExeInstalado)) File.Delete(ExeInstalado); File.Move(velho, ExeInstalado); } catch { }
+                try { if (File.Exists(novo)) File.Delete(novo); } catch { }
+                throw;
+            }
+        }
+
+        // --apos-atualizar <pid>: espera o Pulso que se atualizou fechar e apaga o exe antigo dele
+        public static void AposAtualizar(string pid)
+        {
+            int id;
+            if (int.TryParse(pid, out id))
+                try { using (var p = Process.GetProcessById(id)) p.WaitForExit(20000); }
+                catch (ArgumentException) { } // já fechou
+            string velho = ExeInstalado + ".old";
+            for (int i = 0; i < 20 && File.Exists(velho); i++)
+            {
+                try { File.Delete(velho); }
+                catch (IOException) { Thread.Sleep(250); }
+                catch (UnauthorizedAccessException) { Thread.Sleep(250); }
+            }
+        }
+
         // --sair: pede ao Pulso aberto para fechar e espera ele soltar a instância (até 10 s)
         public static void FecharAberto()
         {

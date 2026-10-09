@@ -39,6 +39,10 @@ namespace Pulso
             { "Sem conexão com o GitHub.", "No connection to GitHub.", "Sin conexión con GitHub." },
             { "O GitHub demorou demais para responder.", "GitHub took too long to respond.", "GitHub tardó demasiado en responder." },
             { "Git não encontrado neste computador.", "Git wasn't found on this computer.", "No se encontró Git en este equipo." },
+            { "O GitHub limitou as consultas. Tente de novo mais tarde.", "GitHub limited the requests. Try again later.", "GitHub limitó las consultas. Inténtalo de nuevo más tarde." },
+            { "Nenhuma versão publicada no GitHub.", "No version published on GitHub.", "No hay ninguna versión publicada en GitHub." },
+            { "O arquivo baixado não confere com a versão publicada.", "The downloaded file doesn't match the published version.", "El archivo descargado no coincide con la versión publicada." },
+            { "Não foi possível instalar a atualização: {0}", "Couldn't install the update: {0}", "No se pudo instalar la actualización: {0}" },
 
             // Barra de status do Claude Code
             { "Já existe uma barra de status configurada ({0}). Nada foi alterado.", "A status line is already configured ({0}). Nothing was changed.", "Ya hay una barra de estado configurada ({0}). No se cambió nada." },

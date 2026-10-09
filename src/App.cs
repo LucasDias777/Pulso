@@ -14,6 +14,12 @@ namespace Pulso
         [STAThread]
         static void Main(string[] args)
         {
+            // Aberto pelo Pulso que acabou de se atualizar (pelo download): espera ele fechar e segue como uma abertura comum
+            if (args.Length > 1 && args[0] == "--apos-atualizar")
+            {
+                Instalacao.AposAtualizar(args[1]);
+                args = new string[0];
+            }
             if (args.Length > 0 && args[0] == "--statusline")
             {
                 try { BarraDeStatus.Executar(); } catch { }
@@ -233,7 +239,7 @@ namespace Pulso
             codex.Iniciar();
             codexProjetos.Iniciar();
             foreach (var f in Extras.Criar()) { extras[f.Key] = f.Value; f.Value.Iniciar(); }
-            Atualizacao.Iniciar(SynchronizationContext.Current);
+            Atualizacao.Iniciar(SynchronizationContext.Current, Sair);
         }
 
         // Diagnóstico: o que o Pulso está mostrando agora, em JSON (para conferir contra a fonte)
