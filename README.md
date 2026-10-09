@@ -12,6 +12,10 @@
   App nativo para Windows que mostra, em anéis sempre à vista, quanto já foi usado de cada limite (sessão de 5 horas, semana, semana por modelo) e quando ele renova. A leitura do Codex chega no instante em que a resposta termina, direto dos arquivos de sessão; a do Claude combina a leitura exata do servidor com uma estimativa local que se move a cada resposta. Leve, sem navegador embutido e sem gravar nenhuma credencial.
 </p>
 
+<p>
+  Uma versão melhorada do <a href="https://github.com/vinzdg/codenotch">Codenotch</a>, refeita como app nativo do Windows. <a href="#créditos">Créditos e licença</a>.
+</p>
+
 <br/>
 
 <p>
@@ -68,6 +72,7 @@
 - [Configurações](#configurações)
 - [Desenvolvimento](#desenvolvimento)
 - [Diagnóstico e linha de comando](#diagnóstico-e-linha-de-comando)
+- [Créditos](#créditos)
 
 ## O que o Pulso faz
 
@@ -320,3 +325,33 @@ Ele compila o commit atual e cria a release `<versão>-<commit>` com o `Pulso.ex
 | `Pulso.exe --previa-instalacao <arquivo.png> [idioma]` | Salva em PNG a janela de instalação, sem mostrar nem instalar nada |
 
 Os demais (`--statusline`, `--sair`, `--registrar`, `--desinstalar`, `--apos-atualizar` e `--gravar-teste`) são usados pela barra de status do Claude Code, pelos `.cmd` e pela atualização. O log fica em `%APPDATA%\Pulso\pulso.log`, aberto pelo botão **Abrir pasta** em Configurações › Geral.
+
+## Créditos
+
+O Pulso é uma versão melhorada do **[Codenotch](https://github.com/vinzdg/codenotch)**, criado por Vinz. O design da cápsula, dos cartões e das Configurações e a leitura de cada provedor partem dele, refeitos em C# como app nativo do Windows, sem navegador embutido, com mudanças e recursos próprios.
+
+O Codenotch é distribuído sob a licença MIT, reproduzida abaixo como ela pede:
+
+```text
+MIT License
+
+Copyright (c) 2026 Vinz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
