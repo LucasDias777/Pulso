@@ -20,7 +20,7 @@ namespace Pulso
     // Daí o "--registrar" cria o atalho no Menu Iniciar e a entrada em Configurações › Aplicativos (Desinstalar chama o desinstalar.cmd).
     static class Instalacao
     {
-        public const string Versao = "1.2";
+        public const string Versao = "1.3";
         const string ChaveApp = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pulso";
 
         public static string Pasta
