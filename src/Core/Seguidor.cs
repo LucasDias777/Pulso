@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime;
 using System.Text;
 using System.Threading;
 
@@ -148,9 +149,18 @@ namespace Pulso
                     EstaEmDia = true;
                     var h = EmDia;
                     if (h != null) h();
+                    LiberarMemoria();
                 }
             }
             finally { conferindo = 0; }
+        }
+
+        // O atrasado passa por blocos de 8 MB, que vão para o heap de objetos grandes, que o .NET não compacta sozinho:
+        // sem compactar, o Pulso ficava com ~150 MB depois de reler o histórico, em vez de ~60
+        static void LiberarMemoria()
+        {
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect();
         }
 
         // Lê do ponto salvo até o fim, em blocos (o atrasado da primeira vez pode ter centenas de MB)
