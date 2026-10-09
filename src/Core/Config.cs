@@ -43,7 +43,7 @@ namespace Pulso
         public bool RitmoDiario;               // anel do Claude mostra o ritmo do dia (cota semanal ÷ 7)
         public bool AnelTracejado;             // anel semanal tracejado
         public bool CapsulaAdaptavel;          // cápsula recolhida muda de cor conforme o fundo
-        public bool Arrastavel;                // pontinhos/engrenagem/Alt movem o notch; desligado, fica fixo no meio da borda
+        public bool Arrastavel;                // pontinhos/engrenagem/Alt movem o notch; desligado, fica travado onde foi deixado
         public string Idioma = "pt";           // pt | en | es (Idioma.Codigos)
 
         public static Config Atual = new Config();
@@ -156,8 +156,9 @@ namespace Pulso
 
         public double PosicaoNaBorda
         {
-            // Fixo (não arrastável): sempre no meio; as posições salvas ficam guardadas para quando religar
-            get { double v; return Arrastavel && Posicao.TryGetValue(Borda.ToString(), out v) ? v : 0.5; }
+            // A posição salva de cada borda vale com o Arrastável ligado ou não: desligar só trava a cápsula onde ela
+            // está e esconde os pontinhos. Borda que nunca foi arrastada fica no meio
+            get { double v; return Posicao.TryGetValue(Borda.ToString(), out v) ? v : 0.5; }
             set { Posicao[Borda.ToString()] = Math.Max(0, Math.Min(1, value)); }
         }
 

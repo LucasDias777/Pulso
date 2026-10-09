@@ -923,7 +923,7 @@ namespace Pulso
                     C = NovoBotao("recentralizar", "Recentralizar".T(), delegate { cfg.PosicaoNaBorda = 0.5; Salvou(); }),
                 });
             else
-                linhasNotch.Add(L("A cápsula fica fixa no meio da borda escolhida acima. Ao passar o cursor na orelha de baixo aparece só a engrenagem das configurações, sem os pontinhos de arrastar.".T()));
+                linhasNotch.Add(L("A cápsula fica travada onde você a deixou (no meio da borda, se nunca foi arrastada). Ao passar o cursor na orelha de baixo aparece só a engrenagem das configurações, sem os pontinhos de arrastar.".T()));
 
             var transicao = NovoSeg("transicao", new[] { "Degrau seco".T(), "Rampa de cor".T() }, cfg.CorGradual ? 1 : 0, i => cfg.CorGradual = i == 1);
             float largDesl = transicao.Tamanho(this).Width;
