@@ -46,6 +46,12 @@ namespace Pulso
                 NotchJanela.Bancada(System.IO.Path.GetFullPath(args[1]), args.Length > 2 ? args[2] : "1x0.8,1x1,1x1.25,1.25x0.8,1.25x1,1.25x1.25,1.5x0.8,1.5x1,1.5x1.25");
                 return;
             }
+            // Diagnóstico: relatório do livro de consumo em HTML e CSV, sem abrir o app (--relatorio <pasta> [dia|semana|mes] [AAAA-MM-DD])
+            if (args.Length > 1 && args[0] == "--relatorio")
+            {
+                Config.Carregar(); // idioma do relatório
+                Environment.Exit(Relatorio.Gerar(System.IO.Path.GetFullPath(args[1]), args.Length > 2 ? args[2] : "mes", args.Length > 3 ? args[3] : null));
+            }
             // Instalação (instalar.cmd / atualizar.cmd / desinstalar.cmd)
             if (args.Length > 0 && args[0] == "--sair")
             {

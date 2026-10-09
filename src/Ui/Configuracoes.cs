@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -107,7 +108,12 @@ namespace Pulso
         bool gravandoAtalho;
         Func<string> avisoAtalho; // montado na hora de desenhar, para seguir o idioma
 
-        static readonly string[] NomesAbas = { "Contas", "Aparência", "Geral" };
+        static readonly string[] NomesAbas = { "Contas", "Aparência", "Geral", "Relatórios" };
+
+        // Aba Relatórios: período mostrado (0 = o atual, -1 = o anterior...) e provedor filtrado (nulo = todos)
+        Relatorio.Periodo relPeriodo = Relatorio.Periodo.Semana;
+        int relDesloc;
+        string relProvedor;
 
         public Configuracoes(App app)
         {
@@ -133,8 +139,9 @@ namespace Pulso
 
             relogio.Tick += delegate
             {
-                // Toast some sozinho; na aba Contas o "exato há X s" anda
-                if (gravandoAtalho || (DateTime.UtcNow - salvoEm).TotalSeconds < 2 || (aba == 0 && DateTime.UtcNow.Millisecond < 260)) Invalidate();
+                // Toast some sozinho; na aba Contas o "exato há X s" anda; nos Relatórios, as respostas novas entram a cada 5 s
+                var agora = DateTime.UtcNow;
+                if (gravandoAtalho || (agora - salvoEm).TotalSeconds < 2 || (aba == 0 && agora.Millisecond < 260) || (aba == 3 && agora.Second % 5 == 0 && agora.Millisecond < 260)) Invalidate();
             };
             relogio.Start();
             FormClosed += delegate { relogio.Dispose(); if (Atalhos.Gravando) Atalhos.Cancelar(); };
@@ -216,6 +223,9 @@ namespace Pulso
             float fim = DesenharConteudo(g, x, y0, w);
             alturaConteudo = fim - y0 + E(20);
             g.Restore(est);
+            // O conteúdo encolheu (outro período nos Relatórios): a rolagem volta para dentro dele
+            float maxRolagem = Math.Max(0, alturaConteudo - corpoR.Height);
+            if (rolagem > maxRolagem) { rolagem = maxRolagem; Invalidate(); }
 
             DesenharToast(g);
         }
@@ -309,7 +319,7 @@ namespace Pulso
                 LinhaLateral(g, new RectangleF(x, y, w, E(36)), "aba" + i, NomesAbas[i].T(), i, aba == i, delegate { MostrarAba(idx); });
                 y += E(38);
             }
-            LinhaLateral(g, new RectangleF(x, r.Bottom - E(8) - E(36), w, E(36)), "sair", "Encerrar o Pulso".T(), 3, false, delegate { Close(); app.Sair(); });
+            LinhaLateral(g, new RectangleF(x, r.Bottom - E(8) - E(36), w, E(36)), "sair", "Encerrar o Pulso".T(), 4, false, delegate { Close(); app.Sair(); });
         }
 
         // O ícone do app (tools\gerar-icone.ps1: disco, trilho, arco de consumo e miolo) em vetor, nítido em qualquer DPI
@@ -341,9 +351,9 @@ namespace Pulso
         // Selos 20×20 com degradê e ícone branco de 12 px
         static readonly string[,] Selos =
         {
-            { "#4fa6ff", "#0a6cff" }, { "#8784ff", "#5856d6" }, { "#a6a6ab", "#727277" }, { "#ff6d62", "#dd3328" },
+            { "#4fa6ff", "#0a6cff" }, { "#8784ff", "#5856d6" }, { "#a6a6ab", "#727277" }, { "#3ddc84", "#12a150" }, { "#ff6d62", "#dd3328" },
         };
-        static readonly GraphicsPath[] Icones = new GraphicsPath[4];
+        static readonly GraphicsPath[] Icones = new GraphicsPath[5];
 
         static GraphicsPath Icone(int i)
         {
@@ -361,6 +371,11 @@ namespace Pulso
                 case 2: // engrenagem (viewBox 24 → 12)
                     p = Svg.Interpretar("M10.03 4.66L10.14 1.97 A10.20 10.20 0 0 1 13.86 1.97 L13.97 4.66A7.60 7.60 0 0 1 15.80 5.42L17.78 3.59 A10.20 10.20 0 0 1 20.41 6.22 L18.58 8.20A7.60 7.60 0 0 1 19.34 10.03L22.03 10.14 A10.20 10.20 0 0 1 22.03 13.86 L19.34 13.97A7.60 7.60 0 0 1 18.58 15.80L20.41 17.78 A10.20 10.20 0 0 1 17.78 20.41 L15.80 18.58A7.60 7.60 0 0 1 13.97 19.34L13.86 22.03 A10.20 10.20 0 0 1 10.14 22.03 L10.03 19.34A7.60 7.60 0 0 1 8.20 18.58L6.22 20.41 A10.20 10.20 0 0 1 3.59 17.78 L5.42 15.80A7.60 7.60 0 0 1 4.66 13.97L1.97 13.86 A10.20 10.20 0 0 1 1.97 10.14 L4.66 10.03A7.60 7.60 0 0 1 5.42 8.20L3.59 6.22 A10.20 10.20 0 0 1 6.22 3.59 L8.20 5.42A7.60 7.60 0 0 1 10.03 4.66 ZM7.90 12a4.10 4.10 0 1 0 8.20 0a4.10 4.10 0 1 0 -8.20 0Z");
                     using (var m = new Matrix()) { m.Scale(0.5f, 0.5f); p.Transform(m); }
+                    break;
+                case 3: // gráfico de barras (viewBox 12)
+                    p = new GraphicsPath();
+                    foreach (var barra in new[] { new RectangleF(1.3f, 6.6f, 2.6f, 4.4f), new RectangleF(4.7f, 3.6f, 2.6f, 7.4f), new RectangleF(8.1f, 1f, 2.6f, 10f) })
+                        using (var b = Arred(barra, 0.7f)) p.AddPath(b, false);
                     break;
                 default: // liga/desliga (traço)
                     p = Svg.Interpretar("M6 1.2v4.3");
@@ -384,7 +399,7 @@ namespace Pulso
                 m.Translate(r.X + E(4), r.Y + E(4));
                 m.Scale(E(1), E(1));
                 ic.Transform(m);
-                if (i == 3) using (var pen = new Pen(Color.White, E(1.5f)) { StartCap = LineCap.Round, EndCap = LineCap.Round }) g.DrawPath(pen, ic);
+                if (i == 4) using (var pen = new Pen(Color.White, E(1.5f)) { StartCap = LineCap.Round, EndCap = LineCap.Round }) g.DrawPath(pen, ic);
                 else if (i == 2)
                 {
                     using (var b = new SolidBrush(Color.White)) g.FillPath(b, ic);
@@ -452,7 +467,7 @@ namespace Pulso
 
         float DesenharConteudo(Graphics g, float x, float y, float w)
         {
-            var blocos = aba == 0 ? Contas() : aba == 1 ? Aparencia() : Geral();
+            var blocos = aba == 0 ? Contas() : aba == 1 ? Aparencia() : aba == 2 ? Geral() : Relatorios();
             bool primeiro = true;
             foreach (var b in blocos)
             {
@@ -589,6 +604,7 @@ namespace Pulso
         class Segmentado : Ctl
         {
             public string[] Opcoes; public int Sel; public Action<int> Mudou;
+            public bool SoTela;                                // muda só o que a janela mostra (Relatórios): sem salvar nem "Salvo"
             public Action<Graphics, int, RectangleF> Icone;   // desenhado antes do texto de cada opção (bandeiras do idioma)
             float IconeL(Configuracoes j) { return Icone == null ? 0 : j.E(20) + j.E(7); }
             float Largura(Configuracoes j, int i) { return Tx.Largura(j.ctl, Opcoes[i]) + j.E(28) + IconeL(j); }
@@ -622,7 +638,7 @@ namespace Pulso
                         Icone(g, i, new RectangleF(x0, (float)Math.Round(rb.Y + (rb.Height - ih) / 2), (float)Math.Round(j.E(20)), ih));
                         Tx.Linha(g, j.ctl, Opcoes[i], t, f, x0 + IconeL(j), ty, Tx.Alinhar.Esquerda, 0);
                     }
-                    if (i != Sel) j.Registrar(rb, id, delegate { Mudou(idx); j.Salvou(); }, true);
+                    if (i != Sel) j.Registrar(rb, id, delegate { Mudou(idx); if (SoTela) j.Invalidate(); else j.Salvou(); }, true);
                     x += rb.Width + j.E(2);
                 }
             }
@@ -1020,6 +1036,290 @@ namespace Pulso
             return l;
         }
 
+        // ---------- relatórios ----------
+        static Color CorProvedor(string id, bool escuro)
+        {
+            if (id == "claude") return Paleta.Hex(escuro ? "#e08a6d" : "#c96442");
+            return Paleta.Hex(escuro ? "#7aa2ff" : "#3d6fe0");
+        }
+
+        List<Bloco> Relatorios()
+        {
+            DateTime de, ate;
+            Relatorio.Intervalo(relPeriodo, Relatorio.Referencia(relPeriodo, relDesloc), out de, out ate);
+            var todos = Relatorio.Registros(de, ate, false);
+            var regs = relProvedor == null ? todos : todos.Where(r => r.Provedor == relProvedor).ToList();
+
+            var periodo = NovoSeg("rel-periodo", new[] { "Dia".T(), "Semana".T(), "Mês".T() }, (int)relPeriodo, i => { relPeriodo = (Relatorio.Periodo)i; relDesloc = 0; });
+            periodo.SoTela = true;
+            var provedor = NovoSeg("rel-provedor", new[] { "Todos".T() }.Concat(Consumo.Provedores.Select(Relatorio.NomeProvedor)).ToArray(),
+                relProvedor == null ? 0 : Array.IndexOf(Consumo.Provedores, relProvedor) + 1, i => relProvedor = i == 0 ? null : Consumo.Provedores[i - 1]);
+            provedor.SoTela = true;
+            var navegar = new Botoes
+            {
+                Itens = new List<Botao>
+                {
+                    new Botao { Id = "rel-anterior", Texto = "‹", Clique = delegate { relDesloc--; Invalidate(); } },
+                    new Botao { Id = "rel-proximo", Texto = "›", Desativado = relDesloc >= 0, Clique = delegate { relDesloc++; Invalidate(); } },
+                },
+            };
+            var blocos = new List<Bloco>
+            {
+                B(null, I("Período".T(), periodo), I(Relatorio.Titulo(relPeriodo, de, ate, relDesloc), navegar), I("Provedor".T(), provedor)),
+            };
+            if (regs.Count == 0)
+            {
+                blocos.Add(B(null, L("Nada registrado neste período.".T()), L(LegendaRelatorios())));
+                return blocos;
+            }
+
+            var total = Relatorio.Soma(regs);
+            var cult = Idioma.Cultura;
+            var numeros = new Numeros();
+            numeros.Itens.Add(new KeyValuePair<string, string>("Tokens".T(), Relatorio.Compacto(total.Total)));
+            numeros.Itens.Add(new KeyValuePair<string, string>("Respostas".T(), total.Respostas.ToString("N0", cult)));
+            if (total.Custo > 0) numeros.Itens.Add(new KeyValuePair<string, string>("Custo equivalente".T(), Relatorio.Dolares(total.Custo)));
+            blocos.Add(B("Resumo".T(), numeros,
+                L("Entrada {0} · cache lido {1} · cache gravado {2} · saída {3}, com {4} de raciocínio".T(Relatorio.Compacto(total.Tokens[0]),
+                    Relatorio.Compacto(total.Tokens[1]), Relatorio.Compacto(total.Tokens[2]), Relatorio.Compacto(total.Tokens[3]), Relatorio.Compacto(total.Tokens[4])))));
+
+            if (relPeriodo != Relatorio.Periodo.Dia)
+            {
+                var grafico = new Grafico { Mes = relPeriodo == Relatorio.Periodo.Mes, Provedores = Consumo.Provedores.Where(p => regs.Any(r => r.Provedor == p)).ToList() };
+                for (var d = de; d <= ate; d = d.AddDays(1))
+                {
+                    string chave = d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    grafico.Dias.Add(d);
+                    grafico.Valores.Add(grafico.Provedores.Select(p => regs.Where(r => r.Dia == chave && r.Provedor == p).Sum(r => r.L.Total)).ToArray());
+                }
+                grafico.Abrir = d => { relPeriodo = Relatorio.Periodo.Dia; relDesloc = (int)(d - DateTime.Today).TotalDays; rolagem = 0; Invalidate(); };
+                blocos.Add(B("Por dia".T(), grafico, L("Clique num dia para ver só ele.".T())));
+            }
+            if (relProvedor == null && regs.Select(r => r.Provedor).Distinct().Count() > 1)
+                blocos.Add(B("Por provedor".T(), Fatias(regs, r => r.Provedor, Relatorio.NomeProvedor, total.Total, true).ToArray()));
+            blocos.Add(B("Por modelo".T(), Fatias(regs, r => r.Modelo, Relatorio.NomeModelo, total.Total, false).ToArray()));
+            blocos.Add(B("Por projeto".T(), Fatias(regs, r => r.Projeto, Relatorio.NomeProjeto, total.Total, false).ToArray()));
+
+            string nome = Relatorio.NomeArquivo(relPeriodo, de) + (relProvedor != null ? "-" + relProvedor : "");
+            string titulo = Relatorio.Titulo(relPeriodo, de, ate, relDesloc) + (relProvedor != null ? " · " + Relatorio.NomeProvedor(relProvedor) : "");
+            bool porDia = relPeriodo != Relatorio.Periodo.Dia;
+            blocos.Add(B("Exportar".T(),
+                I("", new Botoes
+                {
+                    Itens = new List<Botao>
+                    {
+                        NovoBotao("rel-csv", "Salvar CSV…".T(), delegate { SalvarCsv(nome, regs); }),
+                        NovoBotao("rel-html", "Abrir no navegador".T(), delegate { AbrirHtml(nome, regs, titulo, porDia); }),
+                    },
+                }),
+                L(LegendaRelatorios())));
+            return blocos;
+        }
+
+        static string LegendaRelatorios()
+        {
+            return "Conta o uso deste computador, lido dos registros do Claude Code e do Codex e guardado por 13 meses. A porcentagem é a fatia dos tokens do período (entrada, cache e saída); US$ é o preço de API equivalente, não uma cobrança.".T();
+        }
+
+        // Uma linha por grupo, da maior fatia para a menor; depois de 8, o resto vira "Outros"
+        List<Linha> Fatias(List<Relatorio.Registro> regs, Func<Relatorio.Registro, string> chave, Func<string, string> nome, long total, bool porProvedor)
+        {
+            var grupos = regs.GroupBy(chave, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new { Chave = g.Key, Soma = Relatorio.Soma(g), Itens = g.ToList() })
+                .OrderByDescending(g => g.Soma.Total).ToList();
+            var linhas = new List<Linha>();
+            bool escuro = Escuro;
+            var cult = Idioma.Cultura;
+            Func<Consumo.Linha, string> detalhe = s => (s.Respostas == 1 ? "1 resposta · {0} tokens".T(Relatorio.Compacto(s.Total)) : "{0} respostas · {1} tokens".T(s.Respostas.ToString("N0", cult), Relatorio.Compacto(s.Total)))
+                + (s.Custo > 0 ? " · ≈ " + Relatorio.Dolares(s.Custo) : "");
+            // A barra de cada linha vem dividida pela cor de cada provedor (um projeto pode somar Claude Code e Codex)
+            Func<IEnumerable<Relatorio.Registro>, List<KeyValuePair<Color, double>>> segmentos = rs => Consumo.Provedores
+                .Select(p => new KeyValuePair<Color, double>(CorProvedor(p, escuro), total > 0 ? (double)rs.Where(r => r.Provedor == p).Sum(r => r.L.Total) / total : 0))
+                .Where(s => s.Value > 0).ToList();
+            int mostrar = grupos.Count > 9 ? 8 : grupos.Count;
+            foreach (var g in grupos.Take(mostrar))
+                linhas.Add(new Fatia
+                {
+                    Nome = nome(g.Chave), Glifo = porProvedor ? g.Chave : null, Detalhe = detalhe(g.Soma),
+                    Parte = total > 0 ? (double)g.Soma.Total / total : 0, Segmentos = segmentos(g.Itens),
+                });
+            if (grupos.Count > mostrar)
+            {
+                var resto = grupos.Skip(mostrar).SelectMany(g => g.Itens).ToList();
+                var soma = Relatorio.Soma(resto);
+                linhas.Add(new Fatia { Nome = "Outros".T() + " (" + (grupos.Count - mostrar) + ")", Detalhe = detalhe(soma), Parte = total > 0 ? (double)soma.Total / total : 0, Segmentos = segmentos(resto) });
+            }
+            return linhas;
+        }
+
+        void SalvarCsv(string nome, List<Relatorio.Registro> regs)
+        {
+            using (var d = new SaveFileDialog { FileName = nome + ".csv", Filter = "CSV (*.csv)|*.csv", DefaultExt = "csv", OverwritePrompt = true })
+            {
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+                try { System.IO.File.WriteAllText(d.FileName, Relatorio.Csv(regs), new System.Text.UTF8Encoding(true)); }
+                catch (Exception e) { Log.Erro("salvar CSV de consumo", e); MessageBox.Show(this, e.Message, "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            }
+        }
+
+        // Grava em %APPDATA%\Pulso\relatorios e abre no navegador padrão
+        void AbrirHtml(string nome, List<Relatorio.Registro> regs, string titulo, bool porDia)
+        {
+            try
+            {
+                string pasta = System.IO.Path.Combine(Caminhos.Dados, "relatorios");
+                System.IO.Directory.CreateDirectory(pasta);
+                string arq = System.IO.Path.Combine(pasta, nome + ".html");
+                System.IO.File.WriteAllText(arq, Relatorio.Html(regs, titulo, porDia), new System.Text.UTF8Encoding(false));
+                Process.Start(new ProcessStartInfo(arq) { UseShellExecute = true });
+            }
+            catch (Exception e) { Log.Erro("abrir relatório de consumo", e); }
+        }
+
+        // Números grandes lado a lado: rótulo pequeno em cima, valor embaixo
+        class Numeros : Linha
+        {
+            public List<KeyValuePair<string, string>> Itens = new List<KeyValuePair<string, string>>();
+            public override float Altura(Configuracoes j, float w) { return j.E(12) + j.peq.Linha + j.E(2) + j.marca.Linha + j.E(10); }
+            public override void Desenhar(Configuracoes j, Graphics g, float x, float y, float w, float h)
+            {
+                float col = (w - j.E(24)) / Math.Max(1, Itens.Count);
+                for (int i = 0; i < Itens.Count; i++)
+                {
+                    float xi = x + j.E(12) + col * i;
+                    Tx.Linha(g, j.peq, Itens[i].Key, Sobre(j.c.Text2, j.c.Group), j.c.Group, xi, y + j.E(12), Tx.Alinhar.Esquerda, col - j.E(8));
+                    Tx.Linha(g, j.marca, Itens[i].Value, j.c.Text, j.c.Group, xi, y + j.E(12) + j.peq.Linha + j.E(2), Tx.Alinhar.Esquerda, col - j.E(8));
+                }
+            }
+        }
+
+        // Nome e porcentagem, a barra da fatia e o detalhe embaixo (como o Armazenamento do Windows)
+        class Fatia : Linha
+        {
+            public string Nome, Detalhe, Glifo; public double Parte;
+            public List<KeyValuePair<Color, double>> Segmentos;   // cor e fração do total de cada pedaço da barra
+            public override float Altura(Configuracoes j, float w) { return j.E(10) + j.corpo.Linha + j.E(6) + j.E(4) + j.E(5) + j.peq.Linha + j.E(10); }
+            public override void Desenhar(Configuracoes j, Graphics g, float x, float y, float w, float h)
+            {
+                float xi = x + j.E(12), yy = y + j.E(10);
+                if (Glifo != null)
+                {
+                    using (var ic = Glifos.Caminho(Glifo, xi + j.E(8), yy + j.corpo.Linha / 2, j.E(16)))
+                    using (var b = new SolidBrush(j.c.Text)) g.FillPath(b, ic);
+                    xi += j.E(26);
+                }
+                string pct = (Parte * 100).ToString(Parte < 0.001 && Parte > 0 ? "0.##" : "0.0", Idioma.Cultura) + "%";
+                float lp = Tx.Largura(j.corpo, pct);
+                Tx.Linha(g, j.corpo, pct, j.c.Text, j.c.Group, x + w - j.E(12), yy, Tx.Alinhar.Direita, 0);
+                Tx.Linha(g, j.corpo, Nome, j.c.Text, j.c.Group, xi, yy, Tx.Alinhar.Esquerda, x + w - j.E(12) - lp - j.E(12) - xi);
+                yy += j.corpo.Linha + j.E(6);
+                var trilho = new RectangleF(xi, yy, x + w - j.E(12) - xi, j.E(4));
+                j.Preencher(g, trilho, j.E(2), Sobre(j.c.BtnHover, j.c.Group));
+                if (Parte > 0)
+                {
+                    var cheio = new RectangleF(trilho.X, trilho.Y, Math.Max(j.E(4), trilho.Width * (float)Math.Min(1, Parte)), trilho.Height);
+                    var est = g.Save();
+                    using (var forma = Arred(cheio, j.E(2))) g.SetClip(forma, CombineMode.Intersect);
+                    float xs = cheio.X;
+                    for (int i = 0; i < Segmentos.Count; i++)
+                    {
+                        // O último pedaço vai até o fim da barra (sem fresta de arredondamento)
+                        float ws = i == Segmentos.Count - 1 ? cheio.Right - xs : cheio.Width * (float)(Segmentos[i].Value / Parte);
+                        using (var b = new SolidBrush(Segmentos[i].Key)) g.FillRectangle(b, xs, cheio.Y, ws + 0.5f, cheio.Height);
+                        xs += ws;
+                    }
+                    g.Restore(est);
+                }
+                yy += j.E(4) + j.E(5);
+                Tx.Linha(g, j.peq, Detalhe, Sobre(j.c.Text2, j.c.Group), j.c.Group, xi, yy, Tx.Alinhar.Esquerda, x + w - j.E(12) - xi);
+            }
+        }
+
+        // Colunas por dia, empilhadas por provedor; o cursor sobre uma coluna mostra os números e o clique abre o dia
+        class Grafico : Linha
+        {
+            public bool Mes; public List<string> Provedores;
+            public List<DateTime> Dias = new List<DateTime>();
+            public List<long[]> Valores = new List<long[]>();
+            public Action<DateTime> Abrir;
+            float AlturaBarras(Configuracoes j) { return j.E(110); }
+            public override float Altura(Configuracoes j, float w) { return j.E(12) + j.peq.Linha + j.E(10) + AlturaBarras(j) + j.E(6) + j.peq.Linha + j.E(10); }
+            public override void Desenhar(Configuracoes j, Graphics g, float x, float y, float w, float h)
+            {
+                var cult = Idioma.Cultura;
+                bool escuro = j.Escuro;
+                var fraco = Sobre(j.c.Text2, j.c.Group);
+                float xi = x + j.E(12), wi = w - j.E(24);
+                float topo = y + j.E(12) + j.peq.Linha + j.E(10), hb = AlturaBarras(j), base_ = topo + hb;
+                long max = Math.Max(1, Valores.Max(v => v.Sum()));
+                float vaga = wi / Dias.Count, larg = Math.Min(vaga * (Mes ? 0.66f : 0.5f), j.E(36));
+
+                int sob = -1;
+                for (int i = 0; i < Dias.Count; i++) if (j.Sobre("rel-dia:" + i)) sob = i;
+
+                // Linha de base e, para cada dia com uso, a coluna empilhada
+                using (var pen = new Pen(Sobre(j.c.Sep, j.c.Group), Math.Max(1, j.E(1)))) g.DrawLine(pen, xi, base_, xi + wi, base_);
+                for (int i = 0; i < Dias.Count; i++)
+                {
+                    var vagaR = new RectangleF(xi + vaga * i, topo, vaga, hb);
+                    if (i == sob) j.Preencher(g, RectangleF.Inflate(vagaR, -j.E(1), 0), j.E(5), Sobre(j.c.Hover, j.c.Group));
+                    float cx = vagaR.X + vaga / 2, yb = base_;
+                    long soma = Valores[i].Sum();
+                    if (soma > 0)
+                    {
+                        float alt = Math.Max(j.E(2), hb * 0.94f * soma / max);
+                        var est = g.Save();
+                        using (var forma = Arred(new RectangleF(cx - larg / 2, base_ - alt, larg, alt + j.E(3)), Math.Min(j.E(3), larg / 2)))
+                        {
+                            g.SetClip(new RectangleF(cx - larg / 2, base_ - alt, larg, alt), CombineMode.Intersect);
+                            g.SetClip(forma, CombineMode.Intersect);
+                            for (int p = 0; p < Provedores.Count; p++)
+                            {
+                                if (Valores[i][p] <= 0) continue;
+                                float hp = alt * Valores[i][p] / soma;
+                                using (var b = new SolidBrush(CorProvedor(Provedores[p], escuro))) g.FillRectangle(b, cx - larg / 2, yb - hp, larg, hp + 0.5f);
+                                yb -= hp;
+                            }
+                        }
+                        g.Restore(est);
+                    }
+                    var dia = Dias[i];
+                    if (dia <= DateTime.Today) j.Registrar(vagaR, "rel-dia:" + i, delegate { Abrir(dia); }, true);
+                    // Eixo: o dia da semana na semana; no mês, 1, 5, 10, 15... e o último
+                    bool rotular = !Mes || dia.Day == 1 || dia.Day % 5 == 0 || i == Dias.Count - 1 && dia.Day % 5 > 1;
+                    if (rotular)
+                        Tx.Linha(g, j.peq, Mes ? dia.Day.ToString(cult) : dia.ToString("ddd", cult), dia == DateTime.Today ? j.c.Text : fraco, j.c.Group, cx, base_ + j.E(6), Tx.Alinhar.Centro, 0);
+                }
+
+                // Legenda: o dia sob o cursor ou o pico do período; à direita, a cor de cada provedor
+                string legenda;
+                if (sob >= 0)
+                {
+                    var partes = new List<string>();
+                    for (int p = 0; p < Provedores.Count; p++) if (Valores[sob][p] > 0) partes.Add(Relatorio.NomeProvedor(Provedores[p]) + " " + Relatorio.Compacto(Valores[sob][p]));
+                    if (partes.Count < 2) partes.Clear(); // um provedor só no dia: o total já diz tudo
+                    legenda = Util.Maiuscula(Dias[sob].ToString("ddd " + cult.DateTimeFormat.MonthDayPattern, cult)) + ": " + "{0} tokens".T(Relatorio.Compacto(Valores[sob].Sum())) + (partes.Count > 0 ? " (" + string.Join(" · ", partes) + ")" : "");
+                }
+                else
+                {
+                    int pico = Valores.FindIndex(v => v.Sum() == max);
+                    legenda = "Pico: {0}, {1} tokens".T(Dias[pico].ToString(cult.DateTimeFormat.MonthDayPattern, cult), Relatorio.Compacto(max));
+                }
+                float xl = xi + wi;
+                if (Provedores.Count > 1)
+                    for (int p = Provedores.Count - 1; p >= 0; p--)
+                    {
+                        string n = Relatorio.NomeProvedor(Provedores[p]);
+                        float ln = Tx.Largura(j.peq, n);
+                        Tx.Linha(g, j.peq, n, fraco, j.c.Group, xl, y + j.E(12), Tx.Alinhar.Direita, 0);
+                        xl -= ln + j.E(6) + j.E(8);
+                        j.Preencher(g, new RectangleF(xl, y + j.E(12) + (j.peq.Linha - j.E(8)) / 2, j.E(8), j.E(8)), j.E(2), CorProvedor(Provedores[p], escuro));
+                        xl -= j.E(14);
+                    }
+                Tx.Linha(g, j.peq, legenda, sob >= 0 ? j.c.Text : fraco, j.c.Group, xi, y + j.E(12), Tx.Alinhar.Esquerda, xl - xi - j.E(8));
+            }
+        }
+
         // ---------- interação ----------
         Alvo AlvoEm(Point p)
         {
@@ -1106,7 +1406,7 @@ namespace Pulso
             using (var f = new Configuracoes(app) { SemAtivar = true, StartPosition = FormStartPosition.Manual, Location = new Point(-6000, -6000), ShowInTaskbar = false })
             {
                 f.Show();
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < NomesAbas.Length; i++)
                 {
                     f.MostrarAba(i);
                     // Captura o conteúdo inteiro (sem a dobra): cresce a janela até caber tudo

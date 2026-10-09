@@ -13,16 +13,18 @@ namespace Pulso
     //  - o medidor anda a cada resposta entre leituras exatas.
     // O índice e a posição lida de cada arquivo ficam em %APPDATA%\Pulso\custos.json: o atrasado
     // (que pode passar de 1 GB) é lido uma vez só; nas próximas aberturas, só o que foi acrescentado.
+    // Cada resposta também entra no livro de consumo (Consumo.Claude), que guarda os tokens por dia, modelo e projeto.
     class ClaudeSessoes : IDisposable
     {
         static readonly TimeSpan Guardar = TimeSpan.FromDays(8);
-        const int Versao = 2;                   // 2: com o custo por projeto
+        const int Versao = 3;                   // 2: com o custo por projeto; 3: com o livro de consumo
         Seguidor seguidor;
         Timer salvar;
         readonly object trava = new object();
         readonly Dictionary<long, double> porMinuto = new Dictionary<long, double>();   // minuto Unix → custo
         // Cada bloco da mesma resposta repete o "usage"; conta uma vez, pelo maior valor visto
-        readonly Dictionary<string, double> custoPorMensagem = new Dictionary<string, double>();
+        class Vista { public double Custo; public long[] Tokens; }
+        readonly Dictionary<string, Vista> mensagens = new Dictionary<string, Vista>();
         readonly Queue<string> ordemMensagens = new Queue<string>();
         Dictionary<string, long> posicoesSalvas = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         bool mudouDesdeSalvar;
@@ -38,11 +40,13 @@ namespace Pulso
 
         public void Iniciar()
         {
+            Consumo.Claude.Carregar();
             Carregar();
             seguidor = new Seguidor(Caminhos.ClaudeProjetos, AoLinha, TimeSpan.FromMinutes(20), PosicaoInicial);
             seguidor.EmDia += delegate
             {
-                Log.Info("claude: índice de custo em dia (" + porMinuto.Count + " minutos com uso)");
+                int relidos = Consumo.Claude.ConcluirReconstrucao();
+                Log.Info("claude: índice de custo em dia (" + porMinuto.Count + " minutos com uso" + (relidos > 0 ? ", " + relidos + " dias relidos no livro de consumo" : "") + ")");
                 Salvar();
                 var h = EmDia;
                 if (h != null) h();
@@ -51,12 +55,12 @@ namespace Pulso
             salvar = new Timer(delegate { if (mudouDesdeSalvar) Salvar(); }, null, 30000, 30000);
         }
 
-        // Arquivo já indexado: continua de onde parou. Novo e recente: do começo (entra no índice). Antigo: do fim.
+        // Arquivo já indexado: continua de onde parou. Novo e dos meses que o livro guarda: do começo. Antigo: do fim.
         long? PosicaoInicial(string arq, DateTime modificado, long tamanho)
         {
             long p;
             if (posicoesSalvas.TryGetValue(arq, out p) && p <= tamanho) return p;
-            return modificado > DateTime.UtcNow - Guardar ? 0 : (long?)null;
+            return modificado > Consumo.InicioUtc ? 0 : (long?)null;
         }
 
         void AoLinha(string arq, string linha)
@@ -94,28 +98,36 @@ namespace Pulso
         void Somar(string chave, string modelo, IDictionary<string, object> uso, DateTime quando, bool recente, string pasta)
         {
             double custo = Custo(modelo, uso);
-            if (custo <= 0 || quando < DateTime.UtcNow - Guardar) return;
+            if (custo <= 0 || quando < Consumo.InicioUtc) return;
+            var tokens = Tokens(uso);
             lock (trava)
             {
-                double antes, delta;
-                if (custoPorMensagem.TryGetValue(chave, out antes))
+                Vista antes;
+                double delta;
+                var acrescimo = new long[Consumo.Campos];
+                bool nova = !mensagens.TryGetValue(chave, out antes);
+                if (!nova)
                 {
-                    if (custo <= antes) return;
-                    delta = custo - antes;
+                    if (custo <= antes.Custo) return;
+                    delta = custo - antes.Custo;
+                    for (int i = 0; i < Consumo.Campos; i++) { acrescimo[i] = Math.Max(0, tokens[i] - antes.Tokens[i]); tokens[i] = Math.Max(tokens[i], antes.Tokens[i]); }
                 }
                 else
                 {
                     delta = custo;
+                    Array.Copy(tokens, acrescimo, Consumo.Campos);
                     ordemMensagens.Enqueue(chave);
-                    if (ordemMensagens.Count > 4000) custoPorMensagem.Remove(ordemMensagens.Dequeue());
+                    if (ordemMensagens.Count > 4000) mensagens.Remove(ordemMensagens.Dequeue());
                 }
-                custoPorMensagem[chave] = custo;
+                mensagens[chave] = new Vista { Custo = custo, Tokens = tokens };
+                Consumo.Claude.Registrar(quando, modelo, pasta, acrescimo, delta, delta, nova);
+                mudouDesdeSalvar = true;
+                if (quando < DateTime.UtcNow - Guardar) return;
                 long min = Tempo.UnixMs(quando) / 60000;
                 double v;
                 porMinuto.TryGetValue(min, out v);
                 porMinuto[min] = v + delta;
                 if (recente) custoAoVivo += delta;
-                mudouDesdeSalvar = true;
                 Projetos.Claude.Somar(quando, pasta, delta);
             }
             if (recente)
@@ -150,10 +162,9 @@ namespace Pulso
         {
             try
             {
-                if (!File.Exists(Arquivo)) return;
-                var o = Json.Parse(File.ReadAllText(Arquivo));
-                // Índice de antes do consumo por projeto: refaz do zero (lê de novo os últimos 8 dias, uma vez)
-                if ((Json.Num(o, "versao") ?? 1) < Versao) { Log.Info("claude: refazendo o índice de custo com os projetos"); return; }
+                var o = File.Exists(Arquivo) ? Json.Parse(File.ReadAllText(Arquivo)) : null;
+                // Sem índice ou de versão anterior: refaz do zero, uma vez (relê os transcritos que existirem dos meses guardados)
+                if ((Json.Num(o, "versao") ?? 1) < Versao) { Log.Info("claude: refazendo o índice de custo e o livro de consumo"); Consumo.Claude.IniciarReconstrucao(); return; }
                 Projetos.Claude.DeJson(Json.Obj(o, "porProjeto"), DateTime.UtcNow - Guardar);
                 long corte = Tempo.UnixMs(DateTime.UtcNow - Guardar) / 60000;
                 var m = Json.Obj(o, "porMinuto");
@@ -177,6 +188,7 @@ namespace Pulso
         void Salvar()
         {
             if (seguidor == null || !seguidor.EstaEmDia) return; // índice pela metade não vale salvar como se estivesse completo
+            var livro = Consumo.Claude.Preparar();               // antes das posições (ver Consumo.Preparar)
             try
             {
                 var m = new Dictionary<string, object>();
@@ -193,8 +205,9 @@ namespace Pulso
                 {
                     { "versao", Versao }, { "porMinuto", m }, { "porProjeto", Projetos.Claude.ParaJson(DateTime.UtcNow - Guardar) }, { "posicoes", p },
                 }));
+                livro.Gravar();
             }
-            catch (Exception e) { Log.Erro("salvar índice de custo", e); }
+            catch (Exception e) { livro.Desistir(); Log.Erro("salvar índice de custo", e); }
         }
 
         void Marcar(string sessao, string cwd, Atividade a)
@@ -229,6 +242,18 @@ namespace Pulso
             double criado1h = Json.Num(uso, "cache_creation", "ephemeral_1h_input_tokens") ?? 0;
             if (criado5 < 0) criado5 = Json.Num(uso, "cache_creation_input_tokens") ?? 0;
             return (inp * entrada + outp * saida + lido * leitura + criado5 * entrada * 1.25 + criado1h * entrada * 2) / 1e6;
+        }
+
+        // Na ordem de Consumo.NomesCampos; o raciocínio (thinking) já vem somado na saída
+        static long[] Tokens(IDictionary<string, object> uso)
+        {
+            double criado5 = Json.Num(uso, "cache_creation", "ephemeral_5m_input_tokens") ?? -1;
+            double criado = criado5 < 0 ? Json.Num(uso, "cache_creation_input_tokens") ?? 0 : criado5 + (Json.Num(uso, "cache_creation", "ephemeral_1h_input_tokens") ?? 0);
+            return new[]
+            {
+                (long)(Json.Num(uso, "input_tokens") ?? 0), (long)(Json.Num(uso, "cache_read_input_tokens") ?? 0), (long)criado,
+                (long)(Json.Num(uso, "output_tokens") ?? 0), (long)(Json.Num(uso, "output_tokens_details", "thinking_tokens") ?? 0),
+            };
         }
 
         // US$ por milhão de tokens: entrada, saída, leitura de cache

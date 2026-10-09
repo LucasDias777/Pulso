@@ -56,7 +56,9 @@ namespace Pulso
             if (fsw != null || !Directory.Exists(raiz)) return;
             try
             {
-                fsw = new FileSystemWatcher(raiz, "*.jsonl");
+                // Na grafia da varredura (o DirectoryInfo troca o nome curto 8.3 pelo longo; o vigia, não): com grafias
+                // diferentes o mesmo arquivo ganhava duas posições e era lido duas vezes
+                fsw = new FileSystemWatcher(new DirectoryInfo(raiz).FullName, "*.jsonl");
                 fsw.IncludeSubdirectories = true;
                 fsw.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size;
                 fsw.InternalBufferSize = 64 * 1024;

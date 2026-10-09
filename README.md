@@ -77,6 +77,7 @@
 | **Cartão ao passar o cursor** | Cada limite com barra, percentual usado, horário de renovação, folga ou excesso em relação ao ritmo, velocidade e projeção de esgotar antes de renovar |
 | **Projetos e sessões** | Quanto da sessão de 5 horas veio de cada pasta de projeto e quais sessões estão trabalhando ou esperando você; clicar numa sessão traz a janela dela para a frente |
 | **Indicador de atividade** | Dentro do anel: arco girando enquanto o agente trabalha, círculo pulsando quando ele para e espera a sua resposta |
+| **Relatórios de consumo** | Tokens e custo equivalente do dia, da semana ou do mês, com a fatia de cada provedor, modelo e projeto e um gráfico por dia. O histórico fica guardado por 13 meses, mesmo depois de o Claude Code apagar as sessões antigas, e sai em CSV ou HTML |
 | **Avisos** | Cartão ao lado do anel, com som, quando um limite renova, chega a 80%, 95% e 100%, quando o ritmo vai esgotar a sessão antes de renovar e quando uma sessão termina ou espera você |
 | **Exibição** | Sempre aberta, recolhida numa cápsula pequena que abre ao passar o cursor, ou oculta, só com o ícone da bandeja. Em qualquer borda e monitor, e some sozinha em tela cheia |
 | **Atalho global** | `Win + Y` mostra e oculta a cápsula de qualquer lugar; dá para gravar outra combinação |
@@ -116,7 +117,7 @@ flowchart LR
             Credenciais["Logins já salvos pelas ferramentas<br/>lidos na hora, nunca gravados"]
         end
         Pulso["Pulso.exe<br/>cápsula, bandeja e avisos"]
-        Dados["%APPDATA%/Pulso<br/>config, estado, índice de custo e log"]
+        Dados["%APPDATA%/Pulso<br/>config, estado, índice de custo,<br/>livro de consumo e log"]
     end
 
     subgraph Servidores["Servidores oficiais"]
@@ -134,6 +135,8 @@ flowchart LR
     Pulso -->|a cada 5 min, se ativado| Outros
     Pulso <--> Dados
 ```
+
+**O livro de consumo.** A mesma leitura das sessões do Claude Code e do Codex alimenta um livro com os tokens de cada dia por modelo e projeto (entrada, cache lido e gravado, saída e raciocínio) e, no Claude, o custo equivalente de API. Ele fica em `%APPDATA%\Pulso\consumo`, um arquivo por provedor e mês, por 13 meses; cada resposta entra uma vez só, mesmo fechando e reabrindo o Pulso. Na primeira abertura ele recupera o histórico que ainda está no disco. É dele que saem os relatórios, e ele conta só o uso deste computador.
 
 **A estimativa do Claude.** O servidor da Anthropic aceita poucas consultas (responde `429` se consultado demais). Para o anel não ficar parado entre uma leitura e outra, o Pulso mantém um índice do custo de cada minuto de uso, montado a partir dos tokens gravados nas sessões. Entre duas leituras exatas ele calcula quanto cada dólar gasto neste computador representa da janela (`pontos que a janela subiu ÷ custo gasto aqui entre as leituras`) e, a partir daí, soma o custo das respostas novas. Assim, o uso da mesma conta em outro computador entra no número exato e não infla a estimativa. O número estimado aparece com `~` e é corrigido a cada leitura exata.
 
@@ -165,7 +168,7 @@ O Pulso não usa nenhum pacote externo: tudo vem do próprio Windows e do .NET F
 |---|---|
 | **Credenciais** | Lê só os logins que cada ferramenta já mantém no seu usuário, em memória e na hora da consulta. Nada é gravado, copiado ou enviado para outro lugar além do servidor oficial de cada uma |
 | **Token vencido** | Um token do Claude vencido nunca é enviado; o Pulso espera o Claude Code renová-lo |
-| **O que fica salvo** | Só `%APPDATA%\Pulso`: suas escolhas, as últimas leituras, o uso por minuto e por projeto e o log. Nenhuma credencial |
+| **O que fica salvo** | Só `%APPDATA%\Pulso`: suas escolhas, as últimas leituras, o uso por minuto e por projeto, o livro de consumo (tokens por dia, modelo e nome da pasta do projeto, nunca o conteúdo das conversas) e o log. Nenhuma credencial |
 | **Atualização** | Usa o próprio Git do computador e o login que ele já tem; o Pulso não guarda senha nem token do GitHub |
 | **Barra de status (opcional)** | Ligada só nas Configurações: grava uma linha no `~/.claude/settings.json`, com backup, e desligar remove a linha. Fora isso, nada é instalado no Claude Code |
 | **Cápsula adaptável** | Lê o brilho médio de uma faixa fina da tela ao lado da cápsula; nada da imagem é guardado |
@@ -283,6 +286,7 @@ Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botã
 | **Contas** | Quais provedores têm anel, a estimativa ao vivo do Claude e a barra de status do Claude Code. Mostra o plano e a origem da última leitura de cada um |
 | **Aparência** | Exibição, cápsula adaptável, tamanho (o Pequeno encolhe só a cápsula e os anéis; o texto dos cartões fica como no Médio), tema, anel semanal, ritmo do dia no Claude, consumo por projeto, borda, monitor, arrastável e os limites de cor |
 | **Geral** | Idioma, abrir com o Windows, atalho global, cada tipo de aviso e o som, atualizações, pasta de dados e desinstalar |
+| **Relatórios** | O consumo do dia, da semana ou do mês (‹ › volta aos anteriores), filtrado por provedor: resumo, gráfico por dia (clicar num dia abre só ele) e a fatia de cada provedor, modelo e projeto. **Salvar CSV…** abre direto no Excel; **Abrir no navegador** mostra o relatório completo em HTML |
 
 ## Desenvolvimento
 
@@ -309,6 +313,7 @@ Ele compila o commit atual e cria a release `<versão>-<commit>` com o `Pulso.ex
 |---|---|
 | `Pulso.exe --captura <pasta> [escala cinza]` | Salva em PNG a cápsula, os cartões e as Configurações, sem mexer no que está na tela; com uma escala (ex.: `2 cinza`), as imagens deste README |
 | `Pulso.exe --bancada <pasta> [1x0.8,1.25x1,…] [idioma]` | Sem abrir o app, salva a cápsula e os cartões em cada combinação de escala do monitor × tamanho, para conferir o texto em telas que não estão ligadas |
+| `Pulso.exe --relatorio <pasta> [dia\|semana\|mes] [AAAA-MM-DD]` | Sem abrir o app, grava em CSV e HTML o relatório do período que contém a data (hoje, se omitida), lendo o livro salvo |
 | `Pulso.exe --previa` | Mostra um cartão de aviso de exemplo |
 | `Pulso.exe --previa-instalacao <arquivo.png> [idioma]` | Salva em PNG a janela de instalação, sem mostrar nem instalar nada |
 
