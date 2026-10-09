@@ -186,6 +186,8 @@ namespace Pulso
         }
 
         public void MostrarAba(int i) { aba = i; rolagem = 0; Invalidate(); }
+        // A seção Atualizações fica no fim da aba Geral: rola até o fim (a pintura limita à rolagem máxima)
+        public void MostrarAtualizacoes() { aba = 2; rolagem = float.MaxValue; Invalidate(); }
 
         void Salvou()
         {

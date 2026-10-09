@@ -25,6 +25,7 @@ namespace Pulso
         // Montado a cada leitura, no idioma da vez
         public static string Detalhe { get { var d = detalhe; return d == null ? null : d(); } }
         public static event Action Mudou;
+        public static event Action NovaVersao;   // achada pela procura automática, uma vez por versão: a notificação do Windows
         public static bool PeloDownload { get { return Instalacao.Origem == null; } }
 
         static SynchronizationContext ui;
@@ -33,6 +34,7 @@ namespace Pulso
         static int ocupado;
         static Func<string> detalhe;
         static object exeNovo;                  // o Pulso.exe da última Release, quando ela é mais nova
+        static string avisada;                  // a versão nova já anunciada (ou já vista pelo botão)
         static HttpClient http;
 
         public static string Commit { get { return Compilacao.Commit; } }
@@ -54,7 +56,7 @@ namespace Pulso
                 try
                 {
                     if (origem != null) PeloGit(origem, interativo);
-                    else PelaRelease();
+                    else PelaRelease(interativo);
                 }
                 catch (Exception e) { Log.Erro("procurar atualização", e); Definir(Situacao.Erro, () => e.Message); }
                 finally { ocupado = 0; }
@@ -69,10 +71,10 @@ namespace Pulso
             string n = Git(origem, "rev-list --count " + base_ + "..origin/main", false, out erro);
             int novas;
             if (n == null || !int.TryParse(n.Trim(), out novas)) { Falhou(erro); return; }
-            Encontrou(novas);
+            Encontrou(novas, "main+" + novas, interativo);
         }
 
-        static void PelaRelease()
+        static void PelaRelease(bool interativo)
         {
             int status;
             var rel = Api("releases/latest", out status);
@@ -93,14 +95,23 @@ namespace Pulso
                 }
             }
             exeNovo = novas > 0 ? exe : null;
-            Encontrou(novas);
+            Encontrou(novas, tag, interativo);
         }
 
-        static void Encontrou(int novas)
+        // versao: o que identifica a versão nova (a tag da Release, ou quantos commits a main está à frente)
+        static void Encontrou(int novas, string versao, bool interativo)
         {
             if (novas == 0) Definir(Situacao.EmDia, null);
             else Definir(Situacao.Disponivel, () => novas == 1 ? "1 mudança nova".T() : "{0} mudanças novas".T(novas));
             Log.Info("atualização: " + (novas == 0 ? "em dia" : novas + " commit(s) novos"));
+            // Notificação só na procura automática (quem clicou no botão já está vendo) e uma vez por versão
+            if (novas == 0 || versao == avisada) return;
+            avisada = versao;
+            if (interativo) return;
+            Log.Info("atualização: avisada pela notificação do Windows");
+            var c = ui;
+            Action avisar = delegate { var h = NovaVersao; if (h != null) h(); };
+            if (c != null) c.Post(delegate { avisar(); }, null); else avisar();
         }
 
         // Instalado pelo projeto: abre o atualizar.cmd numa janela de console (dá para acompanhar); ele fecha este Pulso

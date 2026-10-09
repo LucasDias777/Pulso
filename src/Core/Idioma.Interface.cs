@@ -79,6 +79,8 @@ namespace Pulso
             { "Embaixo", "Bottom", "Abajo" },
             { "Centralizar", "Center", "Centrar" },
             { "Atualizar o Pulso (versão nova)", "Update Pulso (new version)", "Actualizar Pulso (versión nueva)" },
+            { "Versão nova do Pulso", "New version of Pulso", "Nueva versión de Pulso" },
+            { "Há uma atualização disponível. Clique para ver e instalar.", "An update is available. Click to see and install it.", "Hay una actualización disponible. Haz clic para verla e instalarla." },
             { "Configurações…", "Settings…", "Configuración…" },
             { "Sair do Pulso", "Quit Pulso", "Salir de Pulso" },
 

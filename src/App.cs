@@ -239,6 +239,7 @@ namespace Pulso
             codex.Iniciar();
             codexProjetos.Iniciar();
             foreach (var f in Extras.Criar()) { extras[f.Key] = f.Value; f.Value.Iniciar(); }
+            Atualizacao.NovaVersao += bandeja.AvisarAtualizacao;
             Atualizacao.Iniciar(SynchronizationContext.Current, Sair);
         }
 
@@ -327,6 +328,13 @@ namespace Pulso
             }
             config.WindowState = FormWindowState.Normal;
             config.Activate();
+        }
+
+        // Clique na notificação de versão nova
+        public void AbrirAtualizacoes()
+        {
+            AbrirConfig();
+            config.MostrarAtualizacoes();
         }
 
         public void AplicarConfig()

@@ -17,6 +17,8 @@ namespace Pulso
         readonly App app;
         IntPtr hIcone = IntPtr.Zero;
         string ultimaAssinatura;
+        bool querVisivel;   // o que as Configurações pedem
+        bool avisando;      // notificação de versão nova na tela: o ícone precisa existir enquanto ela estiver lá
 
         public Bandeja(App app)
         {
@@ -33,14 +35,31 @@ namespace Pulso
                 var mi = typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
                 if (mi != null) mi.Invoke(icone, null);
             };
+            icone.BalloonTipClicked += delegate { FimDoAviso(); app.AbrirAtualizacoes(); };
+            icone.BalloonTipClosed += delegate { FimDoAviso(); };
             Estado.Mudou += Atualizar;
             Atualizar();
         }
 
         public bool Visivel
         {
-            get { return icone.Visible; }
-            set { icone.Visible = value; }
+            get { return querVisivel; }
+            set { querVisivel = value; icone.Visible = value || avisando; }
+        }
+
+        // Notificação do Windows de versão nova (no Windows 10 e 11 o balão do ícone da bandeja vira notificação). Sem o
+        // ícone nas Configurações, ele aparece só enquanto a notificação está na tela
+        public void AvisarAtualizacao()
+        {
+            avisando = true;
+            icone.Visible = true;
+            icone.ShowBalloonTip(10000, "Versão nova do Pulso".T(), "Há uma atualização disponível. Clique para ver e instalar.".T(), ToolTipIcon.Info);
+        }
+
+        void FimDoAviso()
+        {
+            avisando = false;
+            icone.Visible = querVisivel;
         }
 
 
