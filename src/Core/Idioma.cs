@@ -18,7 +18,7 @@ namespace Pulso
 
         static Idioma()
         {
-            foreach (var t in new[] { tConfiguracoes, tInterface, tFontes, tSistema })
+            foreach (var t in new[] { tConfiguracoes, tInterface, tFontes, tSistema, tLimites })
                 for (int i = 0; i < t.GetLength(0); i++) traducoes[t[i, 0]] = new[] { t[i, 1], t[i, 2] };
         }
 

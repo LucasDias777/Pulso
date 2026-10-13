@@ -45,6 +45,7 @@ namespace Pulso
         public bool CapsulaAdaptavel;          // cápsula recolhida muda de cor conforme o fundo
         public bool Arrastavel;                // pontinhos/engrenagem/Alt movem o notch; desligado, fica travado onde foi deixado
         public string Idioma = "pt";           // pt | en | es (Idioma.Codigos)
+        public List<RegraLimite> Limites = new List<RegraLimite>(); // aba Limites: onde o Claude Code e o Codex param sozinhos
 
         public static Config Atual = new Config();
 
@@ -101,6 +102,8 @@ namespace Pulso
                     c.CapsulaAdaptavel = Json.Bool(o, "capsulaAdaptavel") ?? c.CapsulaAdaptavel;
                     c.Arrastavel = Json.Bool(o, "arrastavel") ?? c.Arrastavel;
                     c.Idioma = Json.Str(o, "idioma") ?? c.Idioma;
+                    var limites = Json.Arr(o, "limites");
+                    if (limites != null) c.Limites = limites.SelectMany(RegraLimite.Ler).Where(r => Pulso.Limites.Provedores.Contains(r.Provedor)).ToList();
                 }
             }
             catch (Exception e) { Log.Erro("ler config", e); }
@@ -148,6 +151,7 @@ namespace Pulso
                     { "capsulaAdaptavel", CapsulaAdaptavel },
                     { "arrastavel", Arrastavel },
                     { "idioma", Idioma },
+                    { "limites", Limites.Select(r => (object)r.ParaJson()).ToArray() },
                 };
                 Caminhos.GravarAtomico(Caminhos.Config, Json.Write(o));
             }

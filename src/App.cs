@@ -25,6 +25,12 @@ namespace Pulso
                 try { BarraDeStatus.Executar(); } catch { }
                 return;
             }
+            // Hook dos limites (Claude Code e Codex), a cada pedido e ferramenta: qualquer falha deixa passar
+            if (args.Length > 1 && args[0] == "--limite")
+            {
+                try { Limites.Executar(args[1]); } catch { }
+                return;
+            }
             if (args.Length > 0 && args[0] == "--gravar-teste")
             {
                 Mensagens.Enviar(5, "");
@@ -79,30 +85,26 @@ namespace Pulso
                 Config.Carregar();
                 Environment.Exit(Instalacao.InstalarDaqui());
             }
-            // Diagnóstico: a janela de instalação em PNG, sem mostrar nem instalar nada (--previa-instalacao <arquivo> [pt|en|es])
+            // Diagnóstico: cada tela do assistente (instalar, atualizar, desinstalar) em PNG, sem mostrar nem instalar nada
+            // (--previa-instalacao <pasta> [pt|en|es])
             if (args.Length > 1 && args[0] == "--previa-instalacao")
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Config.Carregar();
                 if (args.Length > 2) Config.Atual.Idioma = args[2];
-                using (var j = new OpcoesInstalacao())
+                // Fora da tela: os controles só se desenham com a janela aberta
+                Assistente.Previa(System.IO.Path.GetFullPath(args[1]), (j, arquivo) =>
                 {
-                    // Fora da tela: os controles só se desenham com a janela aberta
-                    j.StartPosition = FormStartPosition.Manual;
-                    j.Location = new Point(-20000, -20000);
-                    j.ShowInTaskbar = false;
-                    j.Show();
-                    Application.DoEvents();
                     using (var b = new Bitmap(j.Width, j.Height))
                     {
                         Fotografar(j, b, 2); // PW_RENDERFULLCONTENT: moldura como o Windows desenha
                         // O Windows 10 não compõe janela fora da tela: o miolo vem vazio. Sem o PW_RENDERFULLCONTENT os
                         // controles se desenham (a moldura sai no estilo antigo)
                         if (MioloVazio(j, b)) Fotografar(j, b, 0);
-                        b.Save(System.IO.Path.GetFullPath(args[1]), System.Drawing.Imaging.ImageFormat.Png);
+                        b.Save(arquivo, System.Drawing.Imaging.ImageFormat.Png);
                     }
-                }
+                });
                 return;
             }
 
@@ -168,6 +170,7 @@ namespace Pulso
         readonly Avisos avisos;
         public readonly CartaoAviso Cartao;
         readonly ContextMenuStrip menuNotch = new ContextMenuStrip();
+        readonly System.Windows.Forms.Timer limitesRelogio = new System.Windows.Forms.Timer { Interval = 30000 };
         Configuracoes config;
         public bool AtalhoAtivo { get; private set; }
 
@@ -183,6 +186,7 @@ namespace Pulso
                 else if (tipo == 2) claude.DaBarraDeStatus(Json.Parse(texto));
                 else if (tipo == 4) Cartao.Mostrar(Avisos.Exemplo());
                 else if (tipo == 6) Sair(); // instalar/atualizar/desinstalar precisam do Pulso fechado
+                else if (tipo == 7) Limites.Parou(texto); // o hook dos limites parou um agente
                 else if (tipo == 5)
                     // Diagnóstico: grava a próxima combinação como nas Configurações e registra no log
                     Atalhos.Gravar((m, k) => Log.Info("teste de atalho: " + Atalhos.Texto(m, (int)k) + (TrocarAtalho(m, (int)k) ? " registrado" : " recusado (em uso)")),
@@ -220,6 +224,12 @@ namespace Pulso
             Cartao = new CartaoAviso(Notch);
             avisos = new Avisos(a => Cartao.Mostrar(a));
             Notch.PrimeiroPlano += MarcarVisto;
+            Limites.Avisar += a => Cartao.Mostrar(a);
+            Estado.Mudou += delegate { Limites.Publicar(false); Limites.Conferir(); };
+            // Regrava a cada 30 s mesmo parado: é assim que o hook sabe que o Pulso continua aberto
+            limitesRelogio.Tick += delegate { Limites.Publicar(false); Limites.Conferir(); };
+            limitesRelogio.Start();
+            Limites.Publicar(true);
 
             AplicarAtalho();
             Integracao.IniciarComWindows(Config.Atual.IniciarComWindows);
@@ -342,11 +352,13 @@ namespace Pulso
             bandeja.Visivel = Config.Atual.IconeBandeja || Config.Atual.Mostrar == Mostrar.Oculto;
             Notch.Reposicionar();
             Estado.Avisar();
+            Limites.Publicar(true);
         }
 
         public void Sair()
         {
             EstadoSalvo.Gravar(true);
+            Limites.Apagar(); // sem o Pulso aberto, os limites não valem (o hook deixa passar)
             ExitThread();
         }
 
@@ -354,6 +366,8 @@ namespace Pulso
         {
             if (disposing)
             {
+                limitesRelogio.Dispose();
+                Limites.Apagar();
                 Cartao.Dispose();
                 claude.Dispose();
                 codex.Dispose();

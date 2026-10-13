@@ -13,6 +13,7 @@ namespace Pulso
         public Som Som;
         public Action Clique;        // clicar no cartão (ex.: ir para a janela da sessão)
         public DateTime Chegou;      // UTC; guardado em tela cheia, vale por 15 min
+        public bool Previa;          // botão Pré-visualizar: é pedido, aparece mesmo com a cápsula oculta
     }
 
     // Cartão de aviso ao lado do notch: 246×128,
@@ -36,6 +37,7 @@ namespace Pulso
         {
             this.notch = notch;
             notch.SaiuDaTelaCheia += delegate { if (atual == null && fila.Count > 0) Proximo(); };
+            notch.Ocultou += delegate { fila.Clear(); if (atual != null) Proximo(); };
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
@@ -66,6 +68,10 @@ namespace Pulso
 
         public void Mostrar(Aviso a)
         {
+            // Cápsula oculta pelo atalho, pela bandeja ou na partida com o Windows: quem a escondeu não quer ser
+            // interrompido, nem com cartão nem com som. O aviso é descartado, não guardado — ao mostrar a cápsula,
+            // os anéis já dizem como está, e um "chegou a 80%" de meia hora atrás só confundiria
+            if (notch.OcultoPeloAtalho && !a.Previa) return;
             a.Chegou = DateTime.UtcNow;
             fila.Enqueue(a);
             if (atual == null) Proximo();
@@ -117,7 +123,7 @@ namespace Pulso
             float x, y;
             if (!preso)
             {
-                // Notch oculto: cartão solto, encostado na borda de sempre
+                // Notch oculto (modo Ocultar, ou a prévia com ele oculto): cartão solto, encostado na borda de sempre
                 switch (borda)
                 {
                     case Borda.Esquerda: x = area.Left + 8 * s; y = area.Top + (area.Height - H) / 2; break;

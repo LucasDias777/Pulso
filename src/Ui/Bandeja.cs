@@ -132,6 +132,11 @@ namespace Pulso
                 m.Items.Add(new ToolStripSeparator());
                 m.Items.Add(new ToolStripMenuItem((app.Notch.OcultoPeloAtalho ? "Mostrar a cápsula" : "Ocultar a cápsula").T(), null, delegate { app.Notch.AlternarVisivel(); }) { ShortcutKeyDisplayString = cfg.Atalho ? cfg.AtalhoTexto : null });
                 m.Items.Add(new ToolStripMenuItem("Atualizar tudo".T(), null, delegate { app.Atualizar(null); }));
+                // Emergência: a regra parou o agente e você precisa dele agora
+                if (cfg.Limites.Count > 0 && Limites.Provedores.Any(Integracao.LimiteInstalado))
+                    m.Items.Add(Limites.Liberado
+                        ? new ToolStripMenuItem("Limites liberados até {0} — voltar a valer".T(Limites.LiberadoAte.ToLocalTime().ToString("HH:mm")), null, delegate { Limites.Liberar(false); })
+                        : new ToolStripMenuItem("Liberar os limites por 1 hora".T(), null, delegate { Limites.Liberar(true); }));
             }
             else
             {

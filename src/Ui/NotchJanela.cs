@@ -57,6 +57,7 @@ namespace Pulso
         public bool TelaCheia { get { return telaCheia; } }
         public event Action<IntPtr> PrimeiroPlano;
         public event Action SaiuDaTelaCheia;     // os avisos guardados durante a tela cheia podem aparecer
+        public event Action Ocultou;             // ocultada pelo atalho ou pela bandeja: o cartão de aviso sai junto
 
         public PointF? CentroDoAnel(string id)
         {
@@ -197,6 +198,8 @@ namespace Pulso
         {
             OcultoPeloAtalho = !OcultoPeloAtalho;
             Renderizar();
+            var h = Ocultou;
+            if (OcultoPeloAtalho && h != null) h();
         }
 
         public void Atualizada(string id)

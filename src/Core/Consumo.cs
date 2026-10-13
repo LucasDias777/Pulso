@@ -12,6 +12,8 @@ namespace Pulso
     // Quem alimenta o livro grava junto as posições de leitura, para nenhuma resposta entrar duas vezes. Quando o
     // índice é refeito (versão nova ou primeira vez), o que é relido vai para um livro à parte e, ao terminar, cada
     // célula (dia, modelo, projeto) fica com a versão que tem mais respostas: transcrito já apagado não zera o gravado.
+    // Ao lado dos dias, o total do provedor por hora local (chave opcional "horas" do mesmo arquivo, para o gráfico do
+    // dia); os dias de antes dela não têm hora. Na reconstrução, cada (dia, hora) segue o mesmo critério das células.
     class Consumo
     {
         public static readonly Consumo Claude = new Consumo("claude"), Codex = new Consumo("codex");
@@ -40,6 +42,7 @@ namespace Pulso
         readonly object trava = new object();
         Dias dados = new Dias();
         Dias relido;                                  // não nulo enquanto o índice é refeito
+        Dictionary<string, Linha[]> horas = new Dictionary<string, Linha[]>(), horasRelidas; // dia → 24 horas (null = sem dado)
         readonly HashSet<string> mesesMudados = new HashSet<string>();
 
         Consumo(string provedor) { Provedor = provedor; }
@@ -56,14 +59,14 @@ namespace Pulso
         public void Registrar(DateTime quandoUtc, string modelo, string pasta, long[] tokens, double peso, double custo, bool novaResposta)
         {
             if (quandoUtc < InicioUtc || (tokens.All(t => t <= 0) && peso <= 0)) return;
-            string dia = quandoUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var local = quandoUtc.ToLocalTime();
+            string dia = local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var r = new Linha { Respostas = novaResposta ? 1 : 0, Peso = Math.Max(0, peso), Custo = Math.Max(0, custo) };
+            for (int i = 0; i < Campos; i++) r.Tokens[i] = Math.Max(0, tokens[i]);
             lock (trava)
             {
-                var l = Celula(relido ?? dados, dia, string.IsNullOrEmpty(modelo) ? "desconhecido" : modelo, Projetos.Nome(pasta));
-                if (novaResposta) l.Respostas++;
-                for (int i = 0; i < Campos; i++) l.Tokens[i] += Math.Max(0, tokens[i]);
-                l.Peso += Math.Max(0, peso);
-                l.Custo += Math.Max(0, custo);
+                Celula(relido ?? dados, dia, string.IsNullOrEmpty(modelo) ? "desconhecido" : modelo, Projetos.Nome(pasta)).Somar(r);
+                Hora(relido != null ? horasRelidas : horas, dia, local.Hour).Somar(r);
                 if (relido == null) mesesMudados.Add(dia.Substring(0, 7));
             }
         }
@@ -77,11 +80,19 @@ namespace Pulso
             return l;
         }
 
+        static Linha Hora(Dictionary<string, Linha[]> h, string dia, int hora)
+        {
+            Linha[] doDia;
+            if (!h.TryGetValue(dia, out doDia)) h[dia] = doDia = new Linha[24];
+            return doDia[hora] ?? (doDia[hora] = new Linha());
+        }
+
         public void Carregar()
         {
             Podar();
-            var d = Ler(Provedor, InicioUtc.ToLocalTime(), null);
-            lock (trava) dados = d;
+            var h = new Dictionary<string, Linha[]>();
+            var d = Ler(Provedor, InicioUtc.ToLocalTime(), null, h);
+            lock (trava) { dados = d; horas = h; }
         }
 
         // Os dias de 'de' a 'ate' (datas locais) do que está na memória: com o Pulso aberto, mais novo que o disco
@@ -97,7 +108,26 @@ namespace Pulso
             return r;
         }
 
-        public void IniciarReconstrucao() { lock (trava) relido = new Dias(); }
+        // As 24 horas (locais) de um dia, da memória; null nas horas sem dado, e no todo se o dia não tem hora
+        public Linha[] Horas(DateTime dia)
+        {
+            Linha[] doDia;
+            lock (trava)
+            {
+                if (!horas.TryGetValue(dia.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), out doDia)) return null;
+                var r = new Linha[24];
+                for (int h = 0; h < 24; h++)
+                    if (doDia[h] != null) (r[h] = new Linha()).Somar(doDia[h]);
+                return r;
+            }
+        }
+
+        public void IniciarReconstrucao() { lock (trava) { relido = new Dias(); horasRelidas = new Dictionary<string, Linha[]>(); } }
+
+        static bool Vence(Linha relida, Linha atual)
+        {
+            return relida.Respostas > atual.Respostas || (relida.Respostas == atual.Respostas && relida.Total > atual.Total);
+        }
 
         // O índice terminou de ser relido: devolve quantos dias o relido trouxe
         public int ConcluirReconstrucao()
@@ -109,13 +139,19 @@ namespace Pulso
                     foreach (var m in dia.Value)
                         foreach (var p in m.Value)
                         {
-                            var atual = Celula(dados, dia.Key, m.Key, p.Key);
-                            if (p.Value.Respostas > atual.Respostas || (p.Value.Respostas == atual.Respostas && p.Value.Total > atual.Total))
-                                dados[dia.Key][m.Key][p.Key] = p.Value;
+                            if (Vence(p.Value, Celula(dados, dia.Key, m.Key, p.Key))) dados[dia.Key][m.Key][p.Key] = p.Value;
+                            mesesMudados.Add(dia.Key.Substring(0, 7));
+                        }
+                foreach (var dia in horasRelidas)
+                    for (int h = 0; h < 24; h++)
+                        if (dia.Value[h] != null)
+                        {
+                            if (Vence(dia.Value[h], Hora(horas, dia.Key, h))) horas[dia.Key][h] = dia.Value[h];
                             mesesMudados.Add(dia.Key.Substring(0, 7));
                         }
                 int n = relido.Count;
                 relido = null;
+                horasRelidas = null;
                 return n;
             }
         }
@@ -162,7 +198,18 @@ namespace Pulso
             foreach (var dia in dados.Keys.Where(d => d.StartsWith(mes, StringComparison.Ordinal)).OrderBy(d => d, StringComparer.Ordinal))
                 dias[dia] = dados[dia].OrderBy(m => m.Key, StringComparer.Ordinal).ToDictionary(m => m.Key,
                     m => (object)m.Value.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(p => p.Key, p => (object)ParaJson(p.Value)));
-            return new Dictionary<string, object> { { "versao", 1 }, { "provedor", Provedor }, { "dias", dias } };
+            var o = new Dictionary<string, object> { { "versao", 1 }, { "provedor", Provedor }, { "dias", dias } };
+            // Chave nova e opcional, sem mudar a versão: o Pulso de antes lê só "dias" e ignora esta
+            var porHora = new Dictionary<string, object>();
+            foreach (var dia in horas.Keys.Where(d => d.StartsWith(mes, StringComparison.Ordinal)).OrderBy(d => d, StringComparer.Ordinal))
+            {
+                var doDia = new Dictionary<string, object>();
+                for (int h = 0; h < 24; h++)
+                    if (horas[dia][h] != null) doDia[h.ToString(CultureInfo.InvariantCulture)] = ParaJson(horas[dia][h]);
+                if (doDia.Count > 0) porHora[dia] = doDia;
+            }
+            if (porHora.Count > 0) o["horas"] = porHora;
+            return o;
         }
 
         static Dictionary<string, object> ParaJson(Linha l)
@@ -175,41 +222,62 @@ namespace Pulso
         }
 
         // Dias gravados de um provedor, de 'de' a 'ate' (datas locais, inclusive); usado também pelo relatório
-        public static Dias Ler(string provedor, DateTime? de, DateTime? ate)
+        public static Dias Ler(string provedor, DateTime? de, DateTime? ate) { return Ler(provedor, de, ate, null); }
+
+        // Com 'horas', lê também as horas dos mesmos dias para dentro dele
+        static Dias Ler(string provedor, DateTime? de, DateTime? ate, Dictionary<string, Linha[]> horas)
         {
             var r = new Dias();
             if (!Directory.Exists(Pasta)) return r;
+            Func<string, bool> fora = k =>
+            {
+                DateTime data;
+                return !DateTime.TryParseExact(k, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out data) ||
+                       (de.HasValue && data < de.Value.Date) || (ate.HasValue && data > ate.Value.Date);
+            };
             foreach (var arq in Directory.GetFiles(Pasta, provedor + "-*.json"))
             {
                 try
                 {
-                    var dias = Json.Obj(Json.Parse(File.ReadAllText(arq)), "dias");
+                    var raiz = Json.Parse(File.ReadAllText(arq));
+                    var dias = Json.Obj(raiz, "dias");
                     if (dias == null) continue;
                     foreach (var d in dias)
                     {
-                        DateTime data;
-                        if (!DateTime.TryParseExact(d.Key, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out data)) continue;
-                        if ((de.HasValue && data < de.Value.Date) || (ate.HasValue && data > ate.Value.Date)) continue;
+                        if (fora(d.Key)) continue;
                         var modelos = d.Value as IDictionary<string, object>;
                         if (modelos == null) continue;
                         foreach (var m in modelos)
                         {
                             var projetos = m.Value as IDictionary<string, object>;
                             if (projetos == null) continue;
-                            foreach (var p in projetos)
-                            {
-                                var l = Celula(r, d.Key, m.Key, p.Key);
-                                l.Respostas = (long)(Json.Num(p.Value, "respostas") ?? 0);
-                                for (int i = 0; i < Campos; i++) l.Tokens[i] = (long)(Json.Num(p.Value, NomesCampos[i]) ?? 0);
-                                l.Peso = Json.Num(p.Value, "peso") ?? 0;
-                                l.Custo = Json.Num(p.Value, "custo") ?? 0;
-                            }
+                            foreach (var p in projetos) Preencher(Celula(r, d.Key, m.Key, p.Key), p.Value);
+                        }
+                    }
+                    var porHora = horas == null ? null : Json.Obj(raiz, "horas");
+                    if (porHora == null) continue;
+                    foreach (var d in porHora)
+                    {
+                        var doDia = d.Value as IDictionary<string, object>;
+                        if (fora(d.Key) || doDia == null) continue;
+                        foreach (var h in doDia)
+                        {
+                            int hora;
+                            if (int.TryParse(h.Key, NumberStyles.None, CultureInfo.InvariantCulture, out hora) && hora < 24) Preencher(Hora(horas, d.Key, hora), h.Value);
                         }
                     }
                 }
                 catch (Exception e) { Log.Erro("ler consumo " + Path.GetFileName(arq), e); }
             }
             return r;
+        }
+
+        static void Preencher(Linha l, object o)
+        {
+            l.Respostas = (long)(Json.Num(o, "respostas") ?? 0);
+            for (int i = 0; i < Campos; i++) l.Tokens[i] = (long)(Json.Num(o, NomesCampos[i]) ?? 0);
+            l.Peso = Json.Num(o, "peso") ?? 0;
+            l.Custo = Json.Num(o, "custo") ?? 0;
         }
 
         // Meses além dos 13 guardados saem do disco

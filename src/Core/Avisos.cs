@@ -191,6 +191,7 @@ namespace Pulso
             {
                 Provedor = "codex", Titulo = "{0} renovado".T("Codex"), Subtitulo = "{0} renovada".T("Sessão (5h)".T()),
                 Status = "Cota disponível · {0}%".T(0), Proxima = "renova às {0}".T(DateTime.Now.AddHours(5).ToString("HH:mm")), Som = Som.Renovacao,
+                Previa = true,
             };
         }
     }

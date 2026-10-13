@@ -78,6 +78,26 @@ namespace Pulso
             return regs.OrderBy(r => r.Dia, StringComparer.Ordinal).ThenBy(r => r.Provedor).ThenBy(r => r.Modelo, StringComparer.Ordinal).ThenBy(r => r.Projeto, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        // Total de tokens de cada provedor em cada hora local do dia (da memória); null se nenhum provedor tem hora
+        // nesse dia, como os dias de antes do livro guardar a hora
+        public static Dictionary<string, long[]> PorHora(DateTime dia)
+        {
+            var r = new Dictionary<string, long[]>();
+            bool algum = false;
+            foreach (var p in Consumo.Provedores)
+            {
+                var horas = Consumo.De(p).Horas(dia);
+                var t = new long[24];
+                if (horas != null)
+                {
+                    algum = true;
+                    for (int h = 0; h < 24; h++) if (horas[h] != null) t[h] = horas[h].Total;
+                }
+                r[p] = t;
+            }
+            return algum ? r : null;
+        }
+
         public static Consumo.Linha Soma(IEnumerable<Registro> rs)
         {
             var t = new Consumo.Linha();
@@ -89,7 +109,34 @@ namespace Pulso
 
         // ---------- nomes e números ----------
         public static string NomeProvedor(string id) { return id == "claude" ? "Claude Code" : id == "codex" ? "Codex" : id; }
-        public static string NomeModelo(string m) { return m == "desconhecido" ? "Modelo desconhecido".T() : m; }
+        // O identificador técnico vira o nome que se fala (pedido do dono): "claude-opus-5-5" → "Opus 5.5",
+        // "claude-haiku-4-5-20251001" → "Haiku 4.5", "claude-3-5-sonnet-…" → "Sonnet 3.5", "gpt-6.1-sol" → "GPT-6.1 Sol",
+        // "codex-auto-review" → "Codex Auto Review". O CSV continua com o identificador, que é o que serve a uma planilha
+        public static string NomeModelo(string m)
+        {
+            if (m == "desconhecido") return "Modelo desconhecido".T();
+            if (string.IsNullOrEmpty(m) || System.Text.RegularExpressions.Regex.IsMatch(m, @"^o\d")) return m; // o3, o4-mini: já é o nome
+            string s = m.Trim(), extra = "";
+            int col = s.IndexOf('[');
+            if (col > 0) { extra = " (" + s.Substring(col + 1).TrimEnd(']').ToUpperInvariant() + ")"; s = s.Substring(0, col); }
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"-\d{8}$", ""); // data da versão
+            Func<string, string> maiuscula = p => p.Length == 0 ? p : char.ToUpperInvariant(p[0]) + p.Substring(1);
+            if (s.StartsWith("claude-"))
+            {
+                var partes = s.Substring(7).Split('-');
+                string nome = string.Join(" ", partes.Where(p => !p.All(char.IsDigit)).Select(maiuscula).ToArray());
+                string versao = string.Join(".", partes.Where(p => p.Length > 0 && p.All(char.IsDigit)).ToArray());
+                return (nome + (versao.Length > 0 ? " " + versao : "")).Trim() + extra;
+            }
+            if (s.StartsWith("gpt-"))
+            {
+                var partes = s.Substring(4).Split('-');
+                return "GPT-" + partes[0] + (partes.Length > 1 ? " " + string.Join(" ", partes.Skip(1).Select(maiuscula).ToArray()) : "") + extra;
+            }
+            if (s.Contains("-") && s.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '.'))
+                return string.Join(" ", s.Split('-').Select(maiuscula).ToArray()) + extra;
+            return m;
+        }
         public static string NomeProjeto(string p) { return p.T(); } // "Sem pasta" traduzido; nomes de pasta ficam como estão
 
         // 950 · 12,3 mil · 4,8 mi · 1,2 bi (no idioma escolhido)

@@ -31,7 +31,7 @@
 <p>
   <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10_|_11-0078D4?style=for-the-badge" />
   <img alt=".NET Framework 4.8" src="https://img.shields.io/badge/.NET_Framework-4.8-512BD4?style=for-the-badge" />
-  <img alt="Versão 1.3" src="https://img.shields.io/badge/Vers%C3%A3o-1.3-00c46a?style=for-the-badge" />
+  <img alt="Versão 1.4" src="https://img.shields.io/badge/Vers%C3%A3o-1.4-00c46a?style=for-the-badge" />
 </p>
 
 <br/>
@@ -80,8 +80,9 @@
 | **Cartão ao passar o cursor** | Cada limite com barra, percentual usado, horário de renovação, folga ou excesso em relação ao ritmo, velocidade e projeção de esgotar antes de renovar |
 | **Projetos e sessões** | Quanto da sessão de 5 horas veio de cada pasta de projeto e quais sessões estão trabalhando ou esperando você; clicar numa sessão traz a janela dela para a frente |
 | **Indicador de atividade** | Dentro do anel: arco girando enquanto o agente trabalha, círculo pulsando quando ele para e espera a sua resposta |
-| **Relatórios de consumo** | Tokens e custo equivalente do dia, da semana ou do mês, com a fatia de cada provedor, modelo e projeto e um gráfico por dia. O histórico fica guardado por 13 meses, mesmo depois de o Claude Code apagar as sessões antigas, e sai em CSV ou HTML |
+| **Relatórios de consumo** | Tokens e custo equivalente do dia, da semana ou do mês, com a fatia de cada provedor, modelo e projeto e um gráfico por dia (no relatório de um dia, por hora). O histórico fica guardado por 13 meses, mesmo depois de o Claude Code apagar as sessões antigas, e sai em CSV ou HTML |
 | **Avisos** | Cartão ao lado do anel, com som, quando um limite renova, chega a 80%, 95% e 100%, quando o ritmo vai esgotar a sessão antes de renovar e quando uma sessão termina ou espera você |
+| **Limites de uso** | O Claude Code e o Codex param sozinhos quando a sessão de 5 horas ou a semana chega no % que você escolher, em todas as pastas ou só nas que você indicar, e recusam pedidos novos ali até renovar. A parada acontece entre um passo e outro, sem cortar uma ferramenta no meio, e um cartão avisa quando dá para retomar |
 | **Exibição** | Sempre aberta, recolhida numa cápsula pequena que abre ao passar o cursor, ou oculta, só com o ícone da bandeja. Em qualquer borda e monitor, e some sozinha em tela cheia |
 | **Atalho global** | `Win + Y` mostra e oculta a cápsula de qualquer lugar; dá para gravar outra combinação |
 | **Três idiomas** | Português, inglês e espanhol; a troca vale na hora |
@@ -139,7 +140,7 @@ flowchart LR
     Pulso <--> Dados
 ```
 
-**O livro de consumo.** A mesma leitura das sessões do Claude Code e do Codex alimenta um livro com os tokens de cada dia por modelo e projeto (entrada, cache lido e gravado, saída e raciocínio) e, no Claude, o custo equivalente de API. Ele fica em `%APPDATA%\Pulso\consumo`, um arquivo por provedor e mês, por 13 meses; cada resposta entra uma vez só, mesmo fechando e reabrindo o Pulso. Na primeira abertura ele recupera o histórico que ainda está no disco. É dele que saem os relatórios, e ele conta só o uso deste computador.
+**O livro de consumo.** A mesma leitura das sessões do Claude Code e do Codex alimenta um livro com os tokens de cada dia por modelo e projeto (entrada, cache lido e gravado, saída e raciocínio) e, no Claude, o custo equivalente de API; desde a versão 1.4, também o total de cada hora, para o gráfico do dia. Ele fica em `%APPDATA%\Pulso\consumo`, um arquivo por provedor e mês, por 13 meses; cada resposta entra uma vez só, mesmo fechando e reabrindo o Pulso. Na primeira abertura ele recupera o histórico que ainda está no disco. É dele que saem os relatórios, e ele conta só o uso deste computador.
 
 **A estimativa do Claude.** O servidor da Anthropic aceita poucas consultas (responde `429` se consultado demais). Para o anel não ficar parado entre uma leitura e outra, o Pulso mantém um índice do custo de cada minuto de uso, montado a partir dos tokens gravados nas sessões. Entre duas leituras exatas ele calcula quanto cada dólar gasto neste computador representa da janela (`pontos que a janela subiu ÷ custo gasto aqui entre as leituras`) e, a partir daí, soma o custo das respostas novas. Assim, o uso da mesma conta em outro computador entra no número exato e não infla a estimativa. O número estimado aparece com `~` e é corrigido a cada leitura exata.
 
@@ -171,9 +172,10 @@ O Pulso não usa nenhum pacote externo: tudo vem do próprio Windows e do .NET F
 |---|---|
 | **Credenciais** | Lê só os logins que cada ferramenta já mantém no seu usuário, em memória e na hora da consulta. Nada é gravado, copiado ou enviado para outro lugar além do servidor oficial de cada uma |
 | **Token vencido** | Um token do Claude vencido nunca é enviado; o Pulso espera o Claude Code renová-lo |
-| **O que fica salvo** | Só `%APPDATA%\Pulso`: suas escolhas, as últimas leituras, o uso por minuto e por projeto, o livro de consumo (tokens por dia, modelo e nome da pasta do projeto, nunca o conteúdo das conversas) e o log. Nenhuma credencial |
+| **O que fica salvo** | Só `%APPDATA%\Pulso`: suas escolhas, as últimas leituras, o uso por minuto e por projeto, o livro de consumo (tokens por dia, modelo e nome da pasta do projeto, e o total de cada hora, nunca o conteúdo das conversas) e o log. Nenhuma credencial |
 | **Atualização** | Consulta as Releases públicas deste repositório, sem login; o Pulso não guarda senha nem token do GitHub. O exe baixado só substitui o instalado se o tamanho e o SHA-256 conferirem com os publicados |
-| **Barra de status (opcional)** | Ligada só nas Configurações: grava uma linha no `~/.claude/settings.json`, com backup, e desligar remove a linha. Fora isso, nada é instalado no Claude Code |
+| **Barra de status (opcional)** | Ligada só nas Configurações: grava uma linha no `~/.claude/settings.json`, com backup, e desligar remove a linha |
+| **Limites (opcional)** | Ligados só nas Configurações › Limites: gravam o hook do Pulso no `~/.claude/settings.json` e no `~/.codex/hooks.json`, com backup, e desligar devolve o arquivo como era. O hook só lê o % que o Pulso já calculou; com o Pulso fechado, ele deixa tudo passar. Fora isso e a barra de status, nada é instalado no Claude Code nem no Codex |
 | **Cápsula adaptável** | Lê o brilho médio de uma faixa fina da tela ao lado da cápsula; nada da imagem é guardado |
 
 ## Leveza
@@ -212,7 +214,7 @@ O Pulso roda em qualquer computador com **Windows 10 ou 11** e se instala como u
 
 1. Clique em **[Instalar Pulso](https://github.com/LucasDias777/Pulso/releases/latest/download/Pulso.exe)** e abra o `Pulso.exe` baixado.
 2. Se o Windows avisar que protegeu o computador (o Pulso não tem assinatura digital), clique em **Mais informações** › **Executar assim mesmo**.
-3. Na janela **Instalar o Pulso**, escolha os atalhos (**Menu Iniciar** vem marcado; **área de trabalho**, desmarcado) e clique em **Instalar**: ele se copia para a pasta de programas do usuário, entra em Aplicativos do Windows, fica com o ícone na bandeja e abre.
+3. Na janela **Instalar o Pulso**, escolha os atalhos (**Menu Iniciar** vem marcado; **área de trabalho**, desmarcado) e clique em **Instalar**: uma barra mostra o progresso enquanto ele se copia para a pasta de programas do usuário e entra em Aplicativos do Windows. No fim, **OK** abre o Pulso, que fica com o ícone na bandeja.
 
 O exe vem das [Releases](https://github.com/LucasDias777/Pulso/releases) deste repositório, e é por elas que o Pulso instalado assim se atualiza.
 
@@ -220,13 +222,13 @@ O exe vem das [Releases](https://github.com/LucasDias777/Pulso/releases) deste r
 
 O Pulso procura versão nova sozinho, 2 minutos depois de abrir e a cada 12 horas, e também pelo botão **Procurar atualização** em Configurações › Geral. Ele compara a versão instalada com a última [Release](https://github.com/LucasDias777/Pulso/releases) deste repositório, que é público: não precisa de login nem de conta no GitHub.
 
-Quando a procura automática acha versão nova, o Pulso avisa com uma notificação do Windows (clicar nela abre as Configurações na seção Atualizações), e aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja. Ao instalar, ele baixa o `Pulso.exe` novo, confere o tamanho e o SHA-256 que o GitHub publica, troca pelo instalado e reabre em alguns segundos. As configurações e o histórico ficam.
+Quando a procura automática acha versão nova, o Pulso avisa com uma notificação do Windows (clicar nela abre as Configurações na seção Atualizações), e aparecem **Instalar atualização** em Configurações › Geral e **Atualizar o Pulso (versão nova)** na bandeja. Ao instalar, uma janela mostra a porcentagem do download do `Pulso.exe` novo; ele confere o tamanho e o SHA-256 que o GitHub publica, troca pelo instalado e avisa que terminou, com a versão nova. **OK** reabre o Pulso. As configurações e o histórico ficam; se algo falhar, a janela diz o motivo e o Pulso continua na versão de antes.
 
-Baixar de novo pelo botão **Instalar Pulso** e abrir o `Pulso.exe` também atualiza: ele pergunta se substitui o Pulso instalado.
+Baixar de novo pelo botão **Instalar Pulso** e abrir o `Pulso.exe` também atualiza: ele mostra a versão instalada e a nova e pergunta se substitui.
 
 ## Desinstalação
 
-Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botão **Desinstalar…** em Configurações › Geral. O desinstalador fecha o Pulso, remove os atalhos, a entrada em Aplicativos, o início com o Windows e a barra de status do Claude Code (se estava ligada), e pergunta se apaga também as configurações e o histórico.
+Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botão **Desinstalar…** em Configurações › Geral. A janela de desinstalação deixa marcar se apaga também as configurações e o histórico; ao confirmar, uma barra mostra o progresso enquanto ela fecha o Pulso e remove os atalhos, a entrada em Aplicativos, o início com o Windows, a barra de status e os limites do Claude Code e do Codex (se estavam ligados). No fim, **OK** fecha a janela e a pasta do programa é apagada.
 
 ## Como usar
 
@@ -238,6 +240,7 @@ Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botã
 | Passar o cursor na orelha de baixo e clicar na engrenagem | Abre as Configurações |
 | Arrastar os pontinhos ou a engrenagem, ou segurar Alt e arrastar a cápsula | Leva a cápsula para outra posição, borda ou monitor (com **Arrastável** ligado) |
 | Botão direito na cápsula | Atualizar, abrir a página de uso, manter aberto, mudar de borda, ocultar, Configurações e sair |
+| Menu da bandeja › **Liberar os limites por 1 hora** | Deixa o Claude Code e o Codex trabalharem acima do limite por uma hora, para uma emergência |
 | `Win + Y` | Mostra e oculta a cápsula |
 | Abrir o Pulso pelo Menu Iniciar com ele já aberto | Abre as Configurações |
 
@@ -261,7 +264,8 @@ Por Configurações › Aplicativos do Windows, como qualquer app, ou pelo botã
 | **Contas** | Quais provedores têm anel, a estimativa ao vivo do Claude e a barra de status do Claude Code. Mostra o plano e a origem da última leitura de cada um |
 | **Aparência** | Exibição, cápsula adaptável, tamanho (o Pequeno encolhe só a cápsula e os anéis; o texto dos cartões fica como no Médio), tema, anel semanal, ritmo do dia no Claude, consumo por projeto, borda, monitor, arrastável e os limites de cor |
 | **Geral** | Idioma, abrir com o Windows, atalho global, cada tipo de aviso e o som, atualizações, pasta de dados e desinstalar |
-| **Relatórios** | O consumo do dia, da semana ou do mês (‹ › volta aos anteriores), filtrado por provedor: resumo, gráfico por dia (clicar num dia abre só ele) e a fatia de cada provedor, modelo e projeto. **Salvar CSV…** abre direto no Excel; **Abrir no navegador** mostra o relatório completo em HTML |
+| **Relatórios** | O consumo do dia, da semana ou do mês (‹ › volta aos anteriores e **Escolher…** lista os últimos com o total de cada um), filtrado por provedor: resumo, gráfico por hora no dia e por dia na semana e no mês (clicar num dia abre as horas dele) e a fatia de cada provedor, modelo e projeto, com o nome legível do modelo. **Salvar CSV…** abre direto no Excel; **Abrir no navegador** mostra o relatório completo em HTML |
+| **Limites** | Ligar a parada no Claude Code e no Codex e montar as regras: todas as pastas ou uma pasta escolhida (as subpastas entram junto), com o % da sessão de 5 horas e da semana em que o agente para e para qual dos dois vale. Cada regra mostra o uso de agora e se está parando. O Codex pede para aprovar o hook uma vez (`/hooks`) |
 
 ## Créditos
 

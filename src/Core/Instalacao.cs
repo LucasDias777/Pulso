@@ -17,10 +17,11 @@ namespace Pulso
 {
     // Instalação como um app comum, sem administrador, em %LOCALAPPDATA%\Programs\Pulso: pelo instalar.cmd (que compila
     // o projeto clonado e copia) ou pelo próprio Pulso.exe baixado das Releases do repositório, que se copia para lá.
-    // Daí o "--registrar" cria o atalho no Menu Iniciar e a entrada em Configurações › Aplicativos (Desinstalar chama o desinstalar.cmd).
+    // Daí o "--registrar" cria o atalho no Menu Iniciar e a entrada em Configurações › Aplicativos (Desinstalar chama o
+    // próprio exe com --desinstalar). Instalar, atualizar e desinstalar passam pelo Assistente: nenhum console à vista.
     static class Instalacao
     {
-        public const string Versao = "1.3";
+        public const string Versao = "1.4";
         const string ChaveApp = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pulso";
 
         public static string Pasta
@@ -28,7 +29,7 @@ namespace Pulso
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Pulso"); }
         }
         static string ExeInstalado { get { return Path.Combine(Pasta, "Pulso.exe"); } }
-        static string Desinstalador { get { return Path.Combine(Pasta, "desinstalar.cmd"); } }
+        static string Desinstalador { get { return Path.Combine(Pasta, "desinstalar.cmd"); } } // só das versões antigas, apagado ao registrar
         static string Atalho { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Pulso.lnk"); } }
         static string AtalhoAreaDeTrabalho { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Pulso.lnk"); } }
 
@@ -71,39 +72,40 @@ namespace Pulso
             get { return PastaDoProjeto == null && !string.Equals(Path.GetFullPath(Application.ExecutablePath), Path.GetFullPath(ExeInstalado), StringComparison.OrdinalIgnoreCase); }
         }
 
-        // Pulso.exe baixado: pergunta (na primeira vez, com os atalhos a criar), fecha o Pulso aberto, copia para a pasta
-        // de programas do usuário, registra pelo próprio instalado (como o instalar.cmd) e o abre. Recusar não instala nada.
+        // Pulso.exe baixado: pelo assistente (sem console) pergunta — na primeira vez, com os atalhos a criar; por cima de
+        // um instalado, se atualiza —, fecha o Pulso aberto, copia para a pasta de programas do usuário, registra pelo
+        // instalado e, no OK do fim, o abre. Recusar não instala nada.
+        // ⚠️ O registro (que grava o início com o Windows) roda no exe JÁ INSTALADO, não neste: um exe fora da pasta de
+        // programas gravando a chave Run foi o que o Defender acusou como persistência (07/10/2026).
         public static int InstalarDaqui()
         {
-            string registrar = "--registrar";
-            if (File.Exists(ExeInstalado))
+            bool porCima = File.Exists(ExeInstalado);
+            var a = new Assistente(porCima ? Assistente.Modo.AtualizarPorCima : Assistente.Modo.Instalar, porCima ? VersaoInstalada() : null, Versao);
+            a.Fazer = j =>
             {
-                if (MessageBox.Show("Atualizar o Pulso instalado com esta versão?".T(), "Pulso", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 0;
-            }
-            else
-            {
-                using (var j = new OpcoesInstalacao())
-                {
-                    if (j.ShowDialog() != DialogResult.OK) return 0;
-                    registrar += " --menu-iniciar=" + (j.MenuIniciar ? 1 : 0) + " --area-de-trabalho=" + (j.AreaDeTrabalho ? 1 : 0);
-                }
-            }
-            try
-            {
+                j.Etapa(10, "Fechando o Pulso aberto…".T());
                 FecharAberto();
+                j.Etapa(35, "Copiando o Pulso para a pasta de programas…".T());
                 Directory.CreateDirectory(Pasta);
                 Copiar(Application.ExecutablePath, ExeInstalado);
-                using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, registrar) { UseShellExecute = false }))
-                    if (!p.WaitForExit(60000) || p.ExitCode != 0) return 1;
-                Process.Start(new ProcessStartInfo(ExeInstalado) { UseShellExecute = false, WorkingDirectory = Pasta });
-                return 0;
-            }
-            catch (Exception e)
-            {
-                Log.Erro("instalar pelo download", e);
-                MessageBox.Show("Não foi possível concluir a instalação do Pulso:\n\n{0}".T(e.Message), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return 1;
-            }
+                j.Etapa(65, "Criando os atalhos e a entrada em Aplicativos…".T());
+                // Por cima: sem as opções, só renova os atalhos que existem (o que a pessoa apagou continua apagado)
+                string registrar = "--registrar" + (porCima ? "" : " --menu-iniciar=" + (j.Opcao1 ? 1 : 0) + " --area-de-trabalho=" + (j.Opcao2 ? 1 : 0));
+                using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, registrar) { UseShellExecute = false, WorkingDirectory = Pasta }))
+                    if (!p.WaitForExit(60000) || p.ExitCode != 0) return "O registro do Pulso no Windows não terminou.".T();
+                j.Etapa(100, "Pronto.".T());
+                return null;
+            };
+            a.AoConcluir = delegate { Process.Start(new ProcessStartInfo(ExeInstalado) { UseShellExecute = false, WorkingDirectory = Pasta }); };
+            Application.Run(a);
+            return a.Concluiu ? 0 : 1;
+        }
+
+        // Só o número: o commit não diz nada a quem usa (pedido do dono)
+        static string VersaoInstalada()
+        {
+            try { using (var k = Registry.CurrentUser.OpenSubKey(ChaveApp)) return k == null ? null : k.GetValue("DisplayVersion") as string; }
+            catch { return null; }
         }
 
         // Cópia com algumas tentativas (o Pulso que acabou de fechar pode segurar o arquivo por um instante), sem a marca
@@ -120,9 +122,9 @@ namespace Pulso
         }
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool DeleteFile(string nome);
 
-        // --registrar [origem] [--menu-iniciar=0|1] [--area-de-trabalho=0|1]: roda já da pasta instalada, logo depois da cópia.
-        // Primeira instalação sem as opções (instalar.cmd) mostra a mesma janela do exe baixado; cancelar devolve 2.
-        // Ao atualizar, só renova os atalhos que existem: o que a pessoa apagou continua apagado.
+        // --registrar [origem] [--menu-iniciar=0|1] [--area-de-trabalho=0|1]: roda já da pasta instalada, logo depois da cópia
+        // (instalar.cmd e a atualização pelo app, que precisa registrar pela versão NOVA). Primeira instalação sem as opções
+        // (instalar.cmd) mostra a pergunta do assistente; cancelar devolve 2.
         public static int Registrar(string[] args)
         {
             string origem = null;
@@ -136,21 +138,29 @@ namespace Pulso
             bool primeira;
             using (var k = Registry.CurrentUser.OpenSubKey(ChaveApp)) primeira = k == null;
             if (primeira && !menu.HasValue)
-                using (var j = new OpcoesInstalacao())
+                using (var j = new Assistente(Assistente.Modo.Instalar))
                 {
-                    if (j.ShowDialog() != DialogResult.OK) return 2;
-                    menu = j.MenuIniciar; area = j.AreaDeTrabalho;
+                    j.ShowDialog();
+                    if (!j.Concluiu) return 2;
+                    menu = j.Opcao1; area = j.Opcao2;
                 }
+            string erro = RegistrarAgora(origem, menu, area);
+            if (erro == null) return 0;
+            MessageBox.Show("Não foi possível concluir a instalação do Pulso:\n\n{0}".T(erro), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return 1;
+        }
+
+        // Atalhos, a entrada em Configurações › Aplicativos e o início com o Windows. Ao atualizar (menu/area nulos), só
+        // renova os atalhos que existem: o que a pessoa apagou continua apagado. Devolve o erro, ou nulo.
+        static string RegistrarAgora(string origem, bool? menu, bool? area)
+        {
+            bool primeira;
+            using (var k = Registry.CurrentUser.OpenSubKey(ChaveApp)) primeira = k == null;
             try
             {
                 Caminhos.Garantir();
-                File.WriteAllText(Desinstalador,
-                    "@echo off\r\n" +
-                    "rem Desinstala o Pulso (usado por Configuracoes > Aplicativos do Windows)\r\n" +
-                    "\"%~dp0Pulso.exe\" --desinstalar\r\n" +
-                    "if errorlevel 1 exit /b 0\r\n" +
-                    "cd /d \"%TEMP%\"\r\n" +
-                    "(goto) 2>nul & rd /s /q \"%~dp0\"\r\n");
+                // O desinstalar.cmd das versões antigas: a desinstalação agora é o próprio exe, sem console
+                if (File.Exists(Desinstalador)) File.Delete(Desinstalador);
                 AjustarAtalho(Atalho, menu ?? (primeira || File.Exists(Atalho)));
                 AjustarAtalho(AtalhoAreaDeTrabalho, area ?? File.Exists(AtalhoAreaDeTrabalho));
                 using (var k = Registry.CurrentUser.CreateSubKey(ChaveApp))
@@ -160,7 +170,7 @@ namespace Pulso
                     k.SetValue("Publisher", "Lucas Dias");
                     k.SetValue("DisplayIcon", ExeInstalado + ",0");
                     k.SetValue("InstallLocation", Pasta);
-                    k.SetValue("UninstallString", "\"" + Path.Combine(Environment.SystemDirectory, "cmd.exe") + "\" /c \"\"" + Desinstalador + "\"\"");
+                    k.SetValue("UninstallString", "\"" + ExeInstalado + "\" --desinstalar");
                     k.SetValue("URLInfoAbout", "https://github.com/LucasDias777/Pulso");
                     k.SetValue("NoModify", 1, RegistryValueKind.DWord);
                     k.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -171,13 +181,12 @@ namespace Pulso
                 Config.Carregar();
                 Integracao.IniciarComWindows(Config.Atual.IniciarComWindows);
                 Log.Info("instalado em " + Pasta + " (versão " + Versao + ")");
-                return 0;
+                return null;
             }
             catch (Exception e)
             {
                 Log.Erro("registrar instalação", e);
-                MessageBox.Show("Não foi possível concluir a instalação do Pulso:\n\n{0}".T(e.Message), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return 1;
+                return e.Message;
             }
         }
 
@@ -205,37 +214,57 @@ namespace Pulso
             catch (Exception e) { Log.Erro("atalho " + arquivo, e); }
         }
 
-        // --desinstalar (chamado pelo desinstalar.cmd, que apaga a pasta depois). 1 = cancelado.
+        // --desinstalar (Configurações › Aplicativos do Windows e o botão Desinstalar…): pelo assistente, sem console.
+        // A pasta do programa sai depois, num cmd ESCONDIDO que espera este processo fechar — um exe não apaga a si mesmo
+        // aberto. 1 = cancelado ou falhou.
         public static int Desinstalar()
         {
-            if (MessageBox.Show("Desinstalar o Pulso deste computador?\n\nA cápsula, o ícone da bandeja e o início com o Windows serão removidos.".T(),
-                    "Desinstalar o Pulso".T(), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 1;
-            FecharAberto();
-            Integracao.IniciarComWindows(false);
-            try { if (Integracao.BarraInstalada()) Integracao.RemoverBarra(); } catch { }
-            AjustarAtalho(Atalho, false);
-            AjustarAtalho(AtalhoAreaDeTrabalho, false);
-            try { Registry.CurrentUser.DeleteSubKeyTree(ChaveApp, false); } catch { }
-            if (Directory.Exists(Caminhos.Dados) &&
-                MessageBox.Show("Apagar também as suas configurações e o histórico do Pulso?\n\n{0}\n\nEscolha Não para mantê-los, caso pretenda instalar de novo.".T(Caminhos.Dados),
-                    "Desinstalar o Pulso".T(), MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            var a = new Assistente(Assistente.Modo.Desinstalar);
+            a.Fazer = j =>
             {
-                try { Directory.Delete(Caminhos.Dados, true); } catch { }
-            }
-            MessageBox.Show("O Pulso foi desinstalado.".T(), "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return 0;
+                bool apagarDados = j.Opcao1;
+                j.Etapa(10, "Fechando o Pulso…".T());
+                FecharAberto();
+                j.Etapa(30, "Desligando o início com o Windows e as integrações…".T());
+                Integracao.IniciarComWindows(false);
+                try { if (Integracao.BarraInstalada()) Integracao.RemoverBarra(); } catch { }
+                foreach (var p in Limites.Provedores)
+                    try { if (Integracao.LimiteInstalado(p)) Integracao.RemoverLimite(p); } catch { }
+                j.Etapa(55, "Removendo os atalhos…".T());
+                AjustarAtalho(Atalho, false);
+                AjustarAtalho(AtalhoAreaDeTrabalho, false);
+                j.Etapa(75, "Removendo a entrada em Aplicativos…".T());
+                try { Registry.CurrentUser.DeleteSubKeyTree(ChaveApp, false); } catch { }
+                if (apagarDados && Directory.Exists(Caminhos.Dados))
+                {
+                    j.Etapa(90, "Apagando as configurações e o histórico…".T());
+                    try { Directory.Delete(Caminhos.Dados, true); } catch { }
+                }
+                j.Etapa(100, "Pronto.".T());
+                return null;
+            };
+            a.AoConcluir = ApagarPastaDepois;
+            Application.Run(a);
+            return a.Concluiu ? 0 : 1;
+        }
+
+        static void ApagarPastaDepois()
+        {
+            if (!Directory.Exists(Pasta)) return;
+            Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+                "/d /c ping -n 3 127.0.0.1 >nul & rd /s /q \"" + Pasta + "\"")
+            { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = Path.GetTempPath() });
         }
 
         public static void AbrirDesinstalador()
         {
-            try { Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/c \"\"" + Desinstalador + "\"\"") { UseShellExecute = false }); }
+            try { Process.Start(new ProcessStartInfo(ExeOficial, "--desinstalar") { UseShellExecute = false, WorkingDirectory = Path.GetTempPath() }); }
             catch (Exception e) { Log.Erro("abrir desinstalador", e); }
         }
 
-        // Atualização pelo download: o Pulso aberto troca o próprio exe (o Windows deixa renomear um exe em uso, não
-        // apagar), registra a versão nova como o instalar.cmd e a abre; ela espera este fechar e apaga o antigo.
-        // Se algo falhar antes de abrir, o exe antigo volta para o lugar.
-        public static void TrocarPor(string novo)
+        // Atualização pelo app: troca o exe instalado pelo novo (o Windows deixa renomear um exe em uso, não apagar) e
+        // registra pela versão nova. Se algo falhar, o exe antigo volta para o lugar. Quem abre o novo é ReabrirNovo, no OK.
+        public static void Trocar(string novo)
         {
             string velho = ExeInstalado + ".old";
             if (File.Exists(velho)) File.Delete(velho);
@@ -245,7 +274,6 @@ namespace Pulso
                 File.Move(novo, ExeInstalado);
                 using (var p = Process.Start(new ProcessStartInfo(ExeInstalado, "--registrar") { UseShellExecute = false }))
                     if (!p.WaitForExit(60000) || p.ExitCode != 0) throw new InvalidOperationException("--registrar");
-                Process.Start(new ProcessStartInfo(ExeInstalado, "--apos-atualizar " + Process.GetCurrentProcess().Id) { UseShellExecute = false, WorkingDirectory = Pasta });
             }
             catch
             {
@@ -253,6 +281,12 @@ namespace Pulso
                 try { if (File.Exists(novo)) File.Delete(novo); } catch { }
                 throw;
             }
+        }
+
+        // A versão nova espera este processo fechar e apaga o exe antigo dele
+        public static void ReabrirNovo()
+        {
+            Process.Start(new ProcessStartInfo(ExeInstalado, "--apos-atualizar " + Process.GetCurrentProcess().Id) { UseShellExecute = false, WorkingDirectory = Pasta });
         }
 
         // --apos-atualizar <pid>: espera o Pulso que se atualizou fechar e apaga o exe antigo dele

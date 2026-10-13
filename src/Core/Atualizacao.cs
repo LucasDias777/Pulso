@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace Pulso
 {
     // Atualização. Instalado pelo projeto: compara o commit desta compilação com a branch main do GitHub (git fetch);
-    // atualizar = atualizar.cmd, que baixa, compila e reinstala. Instalado pelo download: compara com a última Release
+    // atualizar = git pull + build.cmd escondidos e troca do exe, pelo assistente. Instalado pelo download: compara com a última Release
     // do repositório, que é público (sem login); atualizar = baixar o Pulso.exe dela, trocar pelo instalado e reabrir.
     // A procura automática (2 min depois de abrir e a cada 12 h) nunca abre janela de login; o botão pode abrir.
     static class Atualizacao
@@ -34,6 +34,7 @@ namespace Pulso
         static int ocupado;
         static Func<string> detalhe;
         static object exeNovo;                  // o Pulso.exe da última Release, quando ela é mais nova
+        static string tagNova;                  // a tag dela ("1.4-c0ffee1"), para o assistente dizer a versão
         static string avisada;                  // a versão nova já anunciada (ou já vista pelo botão)
         static HttpClient http;
 
@@ -95,6 +96,7 @@ namespace Pulso
                 }
             }
             exeNovo = novas > 0 ? exe : null;
+            tagNova = novas > 0 ? tag : null;
             Encontrou(novas, tag, interativo);
         }
 
@@ -114,53 +116,112 @@ namespace Pulso
             if (c != null) c.Post(delegate { avisar(); }, null); else avisar();
         }
 
-        // Instalado pelo projeto: abre o atualizar.cmd numa janela de console (dá para acompanhar); ele fecha este Pulso
-        // e abre o novo. Pelo download: baixa a Release, troca o exe e reabre.
+        // Abre o assistente no Pulso aberto, sem console. Pelo download: baixa a Release mostrando a porcentagem. Pelo
+        // projeto: git pull e compilação escondidos (o que o atualizar.cmd fazia na janela preta). Os dois trocam o exe e,
+        // no OK do fim, reabrem a versão nova. Falhou: o exe antigo volta e o assistente diz por quê.
         public static void Aplicar()
         {
             string origem = Instalacao.Origem;
-            if (origem == null) { Baixar(); return; }
-            try
-            {
-                Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"),
-                    "/c \"\"" + Path.Combine(origem, "atualizar.cmd") + "\"\"") { UseShellExecute = false, WorkingDirectory = origem });
-            }
-            catch (Exception e) { Log.Erro("abrir atualizar.cmd", e); }
-        }
-
-        static void Baixar()
-        {
             var exe = exeNovo;
-            if (exe == null || Interlocked.Exchange(ref ocupado, 1) == 1) return;
+            if (origem == null && exe == null) return;
+            if (Interlocked.Exchange(ref ocupado, 1) == 1) return;
             Definir(Situacao.Baixando, null);
-            Task.Factory.StartNew(delegate
+            // A tag é "<versão>-<commit>": a tela mostra só a versão
+            string versao = origem == null && tagNova != null ? tagNova.Split('-')[0] : null;
+            var a = new Assistente(Assistente.Modo.Atualizar, null, versao);
+            a.Fazer = j =>
             {
                 try
                 {
-                    Instalacao.TrocarPor(BaixarExe(exe));
-                    Log.Info("atualização: versão nova instalada, reabrindo");
-                    ui.Post(delegate { sair(); }, null);
+                    string erro = origem == null ? PelaReleaseAgora(j, exe) : PeloProjetoAgora(j, origem);
+                    if (erro != null) { Log.Info("atualização: falhou (" + erro + ")"); Definir(Situacao.Erro, () => "Não foi possível instalar a atualização: {0}".T(erro)); }
+                    return erro;
                 }
                 catch (Exception e)
                 {
                     Log.Erro("instalar atualização", e);
                     string motivo = e.GetBaseException().Message;
                     Definir(Situacao.Erro, () => "Não foi possível instalar a atualização: {0}".T(motivo));
+                    return motivo;
                 }
                 finally { ocupado = 0; }
-            });
+            };
+            a.AoConcluir = delegate
+            {
+                Log.Info("atualização: versão nova instalada, reabrindo");
+                Instalacao.ReabrirNovo();
+                sair();
+            };
+            a.Show();
         }
 
+        static string PelaReleaseAgora(Assistente j, object exe)
+        {
+            string arq = BaixarExe(exe,
+                (lidos, total) => j.Progresso(total > 0 ? (int)(lidos * 80 / total) : 0, "Baixando a versão nova… {0} de {1}".T(Kb(lidos), Kb(total))),
+                () => j.Etapa(85, "Conferindo o arquivo baixado…".T()));
+            j.Etapa(92, "Instalando a versão nova…".T());
+            Instalacao.Trocar(arq);
+            j.Etapa(100, "Pronto.".T());
+            return null;
+        }
+
+        static string PeloProjetoAgora(Assistente j, string origem)
+        {
+            string erro;
+            j.Andando(5, 30, "Baixando a versão nova do GitHub…".T());
+            if (Git(origem, "pull --ff-only", true, out erro) == null) return Motivo(erro);
+            j.Andando(30, 85, "Compilando…".T());
+            if ((erro = Compilar(origem)) != null) return erro;
+            j.Etapa(90, "Instalando a versão nova…".T());
+            string novo = Path.Combine(Instalacao.Pasta, "Pulso.exe.novo");
+            File.Copy(Path.Combine(origem, "bin", "Pulso.exe"), novo, true);
+            Instalacao.Trocar(novo);
+            j.Etapa(100, "Pronto.".T());
+            return null;
+        }
+
+        // O build.cmd num cmd escondido (sem janela); a saída vai para o log se falhar
+        static string Compilar(string origem)
+        {
+            var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/d /c \"\"" + Path.Combine(origem, "build.cmd") + "\"\"")
+            {
+                UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = origem,
+                RedirectStandardOutput = true, RedirectStandardError = true,
+            };
+            using (var p = Process.Start(psi))
+            {
+                var saida = p.StandardOutput.ReadToEndAsync();
+                var falha = p.StandardError.ReadToEndAsync();
+                if (!p.WaitForExit(300000)) { try { p.Kill(); } catch { } return "A compilação demorou demais.".T(); }
+                if (p.ExitCode == 0) return null;
+                Log.Info("atualização: compilação falhou: " + (saida.Result + falha.Result).Trim().Replace("\r\n", " | "));
+                return "A compilação falhou. O motivo está no log do Pulso (Configurações › Geral › Pasta de dados).".T();
+            }
+        }
+
+        static string Kb(long bytes) { return Math.Max(1, (long)Math.Round(bytes / 1024.0)).ToString("N0", Idioma.Cultura) + " KB"; }
+
         // Grava o Pulso.exe da Release ao lado do instalado, só se o tamanho e o SHA-256 publicados pelo GitHub conferirem
-        // e se ele for mesmo o Pulso
-        static string BaixarExe(object exe)
+        // e se ele for mesmo o Pulso. Lê em pedaços para mostrar a porcentagem do download
+        static string BaixarExe(object exe, Action<long, long> progresso, Action conferindo)
         {
             byte[] dados;
-            using (var r = Http.GetAsync(Json.Str(exe, "browser_download_url")).Result)
+            long total = (long)(Json.Num(exe, "size") ?? 0);
+            using (var r = Http.GetAsync(Json.Str(exe, "browser_download_url"), HttpCompletionOption.ResponseHeadersRead).Result)
             {
                 r.EnsureSuccessStatusCode();
-                dados = r.Content.ReadAsByteArrayAsync().Result;
+                if (r.Content.Headers.ContentLength.HasValue) total = r.Content.Headers.ContentLength.Value;
+                using (var s = r.Content.ReadAsStreamAsync().Result)
+                using (var ms = new MemoryStream())
+                {
+                    var buf = new byte[32768];
+                    int n;
+                    while ((n = s.Read(buf, 0, buf.Length)) > 0) { ms.Write(buf, 0, n); progresso(ms.Length, total); }
+                    dados = ms.ToArray();
+                }
             }
+            conferindo();
             string digest = Json.Str(exe, "digest");
             bool confere = dados.LongLength == (long)(Json.Num(exe, "size") ?? -1);
             if (confere && digest != null && digest.StartsWith("sha256:"))

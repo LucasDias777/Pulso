@@ -109,7 +109,9 @@ namespace Pulso
         bool gravandoAtalho;
         Func<string> avisoAtalho; // montado na hora de desenhar, para seguir o idioma
 
-        static readonly string[] NomesAbas = { "Contas", "Aparência", "Geral", "Relatórios" };
+        static readonly string[] NomesAbas = { "Contas", "Aparência", "Geral", "Limites", "Relatórios" };
+        static readonly int[] SeloDaAba = { 0, 1, 2, 5, 3 };   // o 4 é o do "Encerrar o Pulso"
+        const int AbaLimites = 3, AbaRelatorios = 4;
 
         // Aba Relatórios: período mostrado (0 = o atual, -1 = o anterior...) e provedor filtrado (nulo = todos)
         Relatorio.Periodo relPeriodo = Relatorio.Periodo.Semana;
@@ -142,7 +144,7 @@ namespace Pulso
             {
                 // Toast some sozinho; na aba Contas o "exato há X s" anda; nos Relatórios, as respostas novas entram a cada 5 s
                 var agora = DateTime.UtcNow;
-                if (gravandoAtalho || (agora - salvoEm).TotalSeconds < 2 || (aba == 0 && agora.Millisecond < 260) || (aba == 3 && agora.Second % 5 == 0 && agora.Millisecond < 260)) Invalidate();
+                if (gravandoAtalho || (agora - salvoEm).TotalSeconds < 2 || ((aba == 0 || aba == AbaLimites) && agora.Millisecond < 260) || (aba == AbaRelatorios && agora.Second % 5 == 0 && agora.Millisecond < 260)) Invalidate();
             };
             relogio.Start();
             FormClosed += delegate { relogio.Dispose(); if (Atalhos.Gravando) Atalhos.Cancelar(); };
@@ -152,7 +154,7 @@ namespace Pulso
             FormClosed += delegate { Atualizacao.Mudou -= AoMudarAtualizacao; };
         }
 
-        void AoMudarEstado() { if (aba == 0 && !IsDisposed) Invalidate(); }
+        void AoMudarEstado() { if ((aba == 0 || aba == AbaLimites) && !IsDisposed) Invalidate(); }
         void AoMudarAtualizacao() { if (aba == 2 && !IsDisposed) Invalidate(); }
 
         protected override CreateParams CreateParams
@@ -320,7 +322,7 @@ namespace Pulso
             for (int i = 0; i < NomesAbas.Length; i++)
             {
                 int idx = i;
-                LinhaLateral(g, new RectangleF(x, y, w, E(36)), "aba" + i, NomesAbas[i].T(), i, aba == i, delegate { MostrarAba(idx); });
+                LinhaLateral(g, new RectangleF(x, y, w, E(36)), "aba" + i, NomesAbas[i].T(), SeloDaAba[i], aba == i, delegate { MostrarAba(idx); });
                 y += E(38);
             }
             LinhaLateral(g, new RectangleF(x, r.Bottom - E(8) - E(36), w, E(36)), "sair", "Encerrar o Pulso".T(), 4, false, delegate { Close(); app.Sair(); });
@@ -356,8 +358,9 @@ namespace Pulso
         static readonly string[,] Selos =
         {
             { "#4fa6ff", "#0a6cff" }, { "#8784ff", "#5856d6" }, { "#a6a6ab", "#727277" }, { "#3ddc84", "#12a150" }, { "#ff6d62", "#dd3328" },
+            { "#ffb340", "#f08000" },
         };
-        static readonly GraphicsPath[] Icones = new GraphicsPath[5];
+        static readonly GraphicsPath[] Icones = new GraphicsPath[6];
 
         static GraphicsPath Icone(int i)
         {
@@ -380,6 +383,10 @@ namespace Pulso
                     p = new GraphicsPath();
                     foreach (var barra in new[] { new RectangleF(1.3f, 6.6f, 2.6f, 4.4f), new RectangleF(4.7f, 3.6f, 2.6f, 7.4f), new RectangleF(8.1f, 1f, 2.6f, 10f) })
                         using (var b = Arred(barra, 0.7f)) p.AddPath(b, false);
+                    break;
+                case 5: // sinal de parar (viewBox 12): octógono com a faixa vazada
+                    p = Svg.Interpretar("M4.1.8h3.8l3.3 3.3v3.8l-3.3 3.3H4.1L.8 7.9V4.1z");
+                    p.AddRectangle(new RectangleF(3.1f, 5.25f, 5.8f, 1.5f));
                     break;
                 default: // liga/desliga (traço)
                     p = Svg.Interpretar("M6 1.2v4.3");
@@ -471,7 +478,7 @@ namespace Pulso
 
         float DesenharConteudo(Graphics g, float x, float y, float w)
         {
-            var blocos = aba == 0 ? Contas() : aba == 1 ? Aparencia() : aba == 2 ? Geral() : Relatorios();
+            var blocos = aba == 0 ? Contas() : aba == 1 ? Aparencia() : aba == 2 ? Geral() : aba == AbaLimites ? LimitesAba() : Relatorios();
             bool primeiro = true;
             foreach (var b in blocos)
             {
@@ -546,6 +553,37 @@ namespace Pulso
             public override void Desenhar(Configuracoes j, Graphics g, float x, float y, float w, float h)
             {
                 Tx.Paragrafo(g, j.peq, Texto, Sobre(j.c.Text2, j.c.Group), j.c.Group, x + j.E(12), y + j.E(8), w - j.E(24));
+            }
+        }
+
+        // Faixa de destaque (a InfoBar do Windows 11): fundo na cor de destaque bem clara, ícone "i", texto e os botões
+        // embaixo — para o que falta fazer, não para explicação
+        class Aviso : Linha
+        {
+            public string Texto; public Botoes Acoes;
+            float Recuo(Configuracoes j) { return j.E(14) + j.E(18) + j.E(12); }
+            float Larg(Configuracoes j, float w) { return w - Recuo(j) - j.E(14); }
+            public override float Altura(Configuracoes j, float w)
+            {
+                float h = j.E(14) + Tx.Paragrafo(null, j.corpo, Texto, Color.Empty, Color.Empty, 0, 0, Larg(j, w));
+                if (Acoes != null) h += j.E(12) + Acoes.Tamanho(j).Height;
+                return h + j.E(14);
+            }
+            public override void Desenhar(Configuracoes j, Graphics g, float x, float y, float w, float h)
+            {
+                var fundo = Sobre(Paleta.Alfa(j.c.Accent, j.Escuro ? 0.22 : 0.12), j.c.Group);
+                j.Preencher(g, new RectangleF(x + j.E(1), y, w - j.E(2), h), j.E(9), fundo);
+                float d = j.E(18), ix = x + j.E(14), iy = y + j.E(14) + (j.corpo.Linha - d) / 2, cx = ix + d / 2;
+                using (var b = new SolidBrush(j.c.Accent)) g.FillEllipse(b, ix, iy, d, d);
+                using (var b = new SolidBrush(j.c.OnAccent))
+                {
+                    g.FillEllipse(b, cx - j.E(1.2f), iy + j.E(3.6f), j.E(2.4f), j.E(2.4f));
+                    g.FillRectangle(b, cx - j.E(1.1f), iy + j.E(7.4f), j.E(2.2f), j.E(7));
+                }
+                float hp = Tx.Paragrafo(g, j.corpo, Texto, j.c.Text, fundo, x + Recuo(j), y + j.E(14), Larg(j, w));
+                if (Acoes == null) return;
+                var t = Acoes.Tamanho(j);
+                Acoes.Desenhar(j, g, new RectangleF(x + Recuo(j), y + j.E(14) + hp + j.E(12), t.Width, t.Height), fundo);
             }
         }
 
@@ -784,12 +822,14 @@ namespace Pulso
         class Deslizante : Ctl
         {
             public int Min, Max, Atual; public float Largura; public Action<int> Mudou;
-            float LarguraValor(Configuracoes j) { return Tx.Largura(j.corpo, "100%") + j.E(2); }
+            public Func<int, string> Rotulo;   // texto do valor; nulo = "N%"
+            string Texto(int v) { return Rotulo != null ? Rotulo(v) : v + "%"; }
+            float LarguraValor(Configuracoes j) { return Math.Max(Tx.Largura(j.corpo, "100%"), Math.Max(Tx.Largura(j.corpo, Texto(Min)), Tx.Largura(j.corpo, Texto(Max)))) + j.E(2); }
             public override SizeF Tamanho(Configuracoes j) { return new SizeF(LarguraValor(j) + j.E(12) + Largura, Math.Max(j.corpo.Linha, j.E(16))); }
             public override void Desenhar(Configuracoes j, Graphics g, RectangleF r, Color fundo)
             {
                 float lv = LarguraValor(j);
-                Tx.Linha(g, j.corpo, Atual + "%", Sobre(j.c.Text2, fundo), fundo, r.X + lv, r.Y + (r.Height - j.corpo.Linha) / 2, Tx.Alinhar.Direita, 0);
+                Tx.Linha(g, j.corpo, Texto(Atual), Sobre(j.c.Text2, fundo), fundo, r.X + lv, r.Y + (r.Height - j.corpo.Linha) / 2, Tx.Alinhar.Direita, 0);
                 var t = new RectangleF(r.Right - Largura, r.Y + (r.Height - j.E(16)) / 2, Largura, j.E(16));
                 float f = (Atual - Min) / (float)(Max - Min);
                 float cx = t.X + j.E(6) + (t.Width - j.E(12)) * f, cy = t.Y + t.Height / 2;
@@ -1040,6 +1080,165 @@ namespace Pulso
             return l;
         }
 
+        // ---------- limites ----------
+        // Um bloco por provedor (pedido do dono): ícone, nome e a chave de parar. Ligado, o próprio bloco pede onde o limite
+        // vale (em todas as pastas ou numa pasta) e as regras dele vêm logo abaixo, com o nome do provedor no título. Os
+        // provedores que ainda não têm como ser parados aparecem no fim, com a chave travada.
+        static string NomeNoLimite(string id) { return id == "claude" ? "Claude Code" : Catalogo.Info(id).Nome; }
+
+        List<Bloco> LimitesAba()
+        {
+            var cfg = Config.Atual;
+            var blocos = new List<Bloco>
+            {
+                B(null, L("O Pulso para o agente quando a cota chega no limite que você definir, e recusa pedidos novos ali até ela renovar. A parada acontece entre um passo e outro, sem cortar uma ferramenta no meio. Ligue o provedor que quer limitar e escolha onde o limite vale.".T())),
+            };
+            Func<int, string> rotulo = v => v <= 0 ? "Sem limite".T() : v + "%";
+            float larg = E(200);
+            bool algumLigado = false;
+            foreach (var id in Limites.Provedores)
+            {
+                string prov = id, nome = NomeNoLimite(id);
+                bool ligado = Integracao.LimiteInstalado(id);
+                algumLigado |= ligado;
+                var regras = cfg.Limites.Where(r => r.Provedor == id).OrderBy(r => r.Pasta != null).ToList();
+                var cabeca = new List<Linha>
+                {
+                    new Conta
+                    {
+                        Provedor = id, Nome = nome, Ligado = ligado,
+                        Detalhe = !ligado ? (id == "claude" ? "Desligado. Ligar grava o hook do Pulso no settings.json do Claude Code, com backup.".T()
+                                                            : "Desligado. Ligar grava o hook do Pulso no hooks.json do Codex, com backup; o Codex pede para aprová-lo uma vez (/hooks no terminal).".T())
+                            : regras.Count == 0 ? null
+                            : regras.Count == 1 ? "Ligado, com 1 regra.".T() : "Ligado, com {0} regras.".T(regras.Count),
+                        Chave = new Chave
+                        {
+                            Id = "lim-" + id, Ligado = ligado,
+                            Mudou = v =>
+                            {
+                                string erro = v ? Integracao.InstalarLimite(prov) : Integracao.RemoverLimite(prov);
+                                if (erro != null) MessageBox.Show(this, erro, "Pulso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            },
+                        },
+                    },
+                };
+                if (ligado && regras.Count == 0)
+                    // Ligou e ainda não há regra: sem ela nada é parado, então a escolha vem em destaque no próprio bloco
+                    cabeca.Add(new Aviso
+                    {
+                        Texto = "Falta escolher onde o limite do {0} vale: em todas as pastas ou só numa pasta específica. Até lá, o Pulso não para o {0}.".T(nome),
+                        Acoes = new Botoes { Itens = new List<Botao> { BotaoTodas(prov, "lim-aviso-todas-" + id), NovoBotao("lim-aviso-pasta-" + id, "Escolher uma pasta…".T(), delegate { MenuDePastas(prov); }) } },
+                    });
+                else if (ligado)
+                {
+                    var botoes = new List<Botao> { NovoBotao("lim-pasta-" + id, "Adicionar pasta…".T(), delegate { MenuDePastas(prov); }) };
+                    if (!regras.Any(r => r.Pasta == null)) botoes.Add(BotaoTodas(prov, "lim-todas-" + id));
+                    cabeca.Add(I("", new Botoes { Itens = botoes }));
+                }
+                blocos.Add(B(null, cabeca.ToArray()));
+                if (!ligado) continue; // desligado, as regras ficam guardadas mas fora da tela
+
+                for (int i = 0; i < regras.Count; i++)
+                {
+                    var r = regras[i];
+                    string k = id + i;
+                    blocos.Add(B(nome + " · " + (r.Pasta == null ? "Todas as pastas".T() : Limites.NomePasta(r.Pasta)),
+                        new Item
+                        {
+                            Dica = true, Rotulo = r.Pasta ?? "Vale em qualquer pasta, inclusive nas que tiverem regra própria.".T(),
+                            C = NovoBotao("lim-rm" + k, "Remover".T(), delegate { cfg.Limites.Remove(r); Salvou(); }),
+                        },
+                        I("Sessão de 5 horas".T(), new Deslizante { Id = "lim-s" + k, Min = 0, Max = 100, Atual = r.Sessao, Largura = larg, Rotulo = rotulo, Mudou = v => r.Sessao = v }),
+                        I("Semana".T(), new Deslizante { Id = "lim-w" + k, Min = 0, Max = 100, Atual = r.Semana, Largura = larg, Rotulo = rotulo, Mudou = v => r.Semana = v }),
+                        L(SituacaoDaRegra(r))));
+                }
+            }
+
+            if (algumLigado)
+            {
+                blocos.Add(B(null, L("Cada regra conta o uso total da cota daquele provedor, o mesmo número do anel: com 40% na sessão de 5 horas, o agente para quando a sessão chega a 40%, quem quer que tenha gasto. Numa pasta com mais de uma regra, vale a mais rígida. Sem limite desliga aquela janela.".T())));
+                blocos.Add(B("Emergência".T(),
+                    I(Limites.Liberado ? "Liberados até {0}".T(Limites.LiberadoAte.ToLocalTime().ToString("HH:mm")) : "Liberar os limites por 1 hora".T(),
+                        NovoBotao("lim-liberar", Limites.Liberado ? "Voltar a valer".T() : "Liberar".T(), delegate { Limites.Liberar(!Limites.Liberado); Invalidate(); })),
+                    L("Os agentes voltam a trabalhar por uma hora, mesmo acima do limite. Também fica no menu da bandeja. Com o Pulso fechado, os limites não valem.".T())));
+            }
+
+            var outros = new List<Linha>();
+            foreach (var info in Catalogo.Todos.Where(i => !Limites.Provedores.Contains(i.Id)))
+                outros.Add(new Conta { Provedor = info.Id, Nome = info.Nome, Ligado = false, Detalhe = LimiteIndisponivel(info.Id), Chave = new Chave { Id = "lim-" + info.Id, Travado = true } });
+            blocos.Add(B("Ainda não disponíveis no Pulso".T(), outros.ToArray()));
+            return blocos;
+        }
+
+        Botao BotaoTodas(string prov, string id)
+        {
+            return NovoBotao(id, "Em todas as pastas".T(), delegate { Config.Atual.Limites.Insert(0, new RegraLimite { Provedor = prov }); Salvou(); });
+        }
+
+        // O que cada um oferece hoje para um programa de fora parar o agente (pesquisa de 13/10/2026) — todos têm algum
+        // mecanismo; o que falta é o Pulso se ligar a ele, e cada um precisa ser feito e testado à parte
+        static string LimiteIndisponivel(string id)
+        {
+            switch (id)
+            {
+                case "glm": return "Usado dentro do Claude Code, dá para parar pelos mesmos hooks; falta o Pulso contar a cota da z.ai nesse caso.".T();
+                case "cursor": return "Tem hooks que recusam pedidos e bloqueiam ferramentas (no IDE); falta o Pulso se ligar a eles.".T();
+                case "copilot": return "Tem hooks no CLI e no VS Code (em prévia) que bloqueiam ferramentas; falta o Pulso se ligar a eles.".T();
+                case "gemini": return "Tem hooks que bloqueiam ferramentas e encerram a tarefa; falta o Pulso se ligar a eles.".T();
+                case "grok": return "Tem hooks que só bloqueiam ferramentas, sem recusar pedidos; falta o Pulso se ligar a eles.".T();
+                case "opencode": return "Bloqueia ferramentas por um plugin em JavaScript; falta o Pulso ter o plugin dele.".T();
+                default: return "Falta o Pulso se ligar a este agente.".T();
+            }
+        }
+
+        static string SituacaoDaRegra(RegraLimite r)
+        {
+            Func<double?, string> pct = v => v.HasValue ? Math.Round(v.Value * 100).ToString("0", Idioma.Cultura) + "%" : "—";
+            var u = Limites.DoEstado(r.Provedor);
+            if (u == null) return "Agora — sem leitura do {0}.".T(NomeNoLimite(r.Provedor));
+            string t = "Agora — 5h {0}, semana {1}".T(pct(u.Sessao), pct(u.Semana));
+            var b = Limites.Avaliar(new[] { r }, r.Provedor, r.Pasta, u, DateTime.UtcNow);
+            if (b != null) t += " (" + (Limites.Liberado ? "acima do limite, liberado".T() : "parado".T()) + (b.Renova.HasValue ? ", " + Texto.Renova(b.Renova) : "") + ")";
+            return t;
+        }
+
+        // Pastas das sessões que o Pulso está vendo daquele provedor (e dos outros) e, para o resto, o seletor do Windows
+        void MenuDePastas(string prov)
+        {
+            var cfg = Config.Atual;
+            var recentes = Estado.Copia(prov).Sessoes.Values.Concat(Limites.Provedores.Where(p => p != prov).SelectMany(p => Estado.Copia(p).Sessoes.Values))
+                .OrderByDescending(s => s.Ultima).Select(s => s.Pasta)
+                .Where(p => !string.IsNullOrEmpty(p) && System.IO.Directory.Exists(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(p => !cfg.Limites.Any(r => r.Provedor == prov && r.Pasta != null && string.Equals(r.Pasta.TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)))
+                .Take(10).ToList();
+            var m = new ContextMenuStrip();
+            Bandeja.Estilizar(m);
+            if (recentes.Count > 0)
+            {
+                m.Items.Add(new ToolStripMenuItem("Sessões recentes".T()) { Enabled = false });
+                foreach (var p in recentes)
+                {
+                    string pasta = p;
+                    m.Items.Add(new ToolStripMenuItem(Limites.NomePasta(p), null, delegate { NovaRegra(prov, pasta); }) { ToolTipText = p });
+                }
+                m.Items.Add(new ToolStripSeparator());
+            }
+            m.Items.Add(new ToolStripMenuItem("Procurar outra pasta…".T(), null, delegate
+            {
+                using (var d = new FolderBrowserDialog { Description = "Pasta em que o limite vale (as subpastas entram junto)".T(), ShowNewFolderButton = false })
+                    if (d.ShowDialog(this) == DialogResult.OK) NovaRegra(prov, d.SelectedPath);
+            }));
+            m.Closed += delegate { BeginInvoke((Action)m.Dispose); };
+            m.Show(System.Windows.Forms.Cursor.Position);
+        }
+
+        void NovaRegra(string prov, string pasta)
+        {
+            Config.Atual.Limites.Add(new RegraLimite { Provedor = prov, Pasta = pasta.Length > 3 ? pasta.TrimEnd('\\') : pasta });
+            Salvou();
+        }
+
         // ---------- relatórios ----------
         static Color CorProvedor(string id, bool escuro)
         {
@@ -1054,22 +1253,33 @@ namespace Pulso
             var todos = Relatorio.Registros(de, ate, false);
             var regs = relProvedor == null ? todos : todos.Where(r => r.Provedor == relProvedor).ToList();
 
-            var periodo = NovoSeg("rel-periodo", new[] { "Dia".T(), "Semana".T(), "Mês".T() }, (int)relPeriodo, i => { relPeriodo = (Relatorio.Periodo)i; relDesloc = 0; });
+            // Trocar Dia/Semana/Mês mantém o lugar: de uma semana passada para Mês cai no mês daquela semana, não em hoje
+            var periodo = NovoSeg("rel-periodo", new[] { "Dia".T(), "Semana".T(), "Mês".T() }, (int)relPeriodo, i =>
+            {
+                var refe = Relatorio.Referencia(relPeriodo, relDesloc);
+                relPeriodo = (Relatorio.Periodo)i;
+                relDesloc = Math.Min(0, DeslocDe(relPeriodo, refe));
+            });
             periodo.SoTela = true;
             var provedor = NovoSeg("rel-provedor", new[] { "Todos".T() }.Concat(Consumo.Provedores.Select(Relatorio.NomeProvedor)).ToArray(),
                 relProvedor == null ? 0 : Array.IndexOf(Consumo.Provedores, relProvedor) + 1, i => relProvedor = i == 0 ? null : Consumo.Provedores[i - 1]);
             provedor.SoTela = true;
-            var navegar = new Botoes
+            var botoesPeriodo = new List<Botao>
             {
-                Itens = new List<Botao>
-                {
-                    new Botao { Id = "rel-anterior", Texto = "‹", Clique = delegate { relDesloc--; Invalidate(); } },
-                    new Botao { Id = "rel-proximo", Texto = "›", Desativado = relDesloc >= 0, Clique = delegate { relDesloc++; Invalidate(); } },
-                },
+                new Botao { Id = "rel-anterior", Texto = "‹", Clique = delegate { relDesloc--; rolagem = 0; Invalidate(); } },
+                new Botao { Id = "rel-escolher", Texto = "Escolher…".T(), Clique = MenuDePeriodos },
+                new Botao { Id = "rel-proximo", Texto = "›", Desativado = relDesloc >= 0, Clique = delegate { relDesloc++; rolagem = 0; Invalidate(); } },
             };
+            if (relDesloc != 0)
+                botoesPeriodo.Add(new Botao
+                {
+                    Id = "rel-atual",
+                    Texto = relPeriodo == Relatorio.Periodo.Dia ? "Hoje".T() : relPeriodo == Relatorio.Periodo.Semana ? "Esta semana".T() : "Este mês".T(),
+                    Clique = delegate { relDesloc = 0; rolagem = 0; Invalidate(); },
+                });
             var blocos = new List<Bloco>
             {
-                B(null, I("Período".T(), periodo), I(Relatorio.Titulo(relPeriodo, de, ate, relDesloc), navegar), I("Provedor".T(), provedor)),
+                B(null, I("Período".T(), periodo), I(NomeDoPeriodo(relPeriodo, relDesloc), new Botoes { Itens = botoesPeriodo }), I("Provedor".T(), provedor)),
             };
             if (regs.Count == 0)
             {
@@ -1089,15 +1299,48 @@ namespace Pulso
 
             if (relPeriodo != Relatorio.Periodo.Dia)
             {
-                var grafico = new Grafico { Mes = relPeriodo == Relatorio.Periodo.Mes, Provedores = Consumo.Provedores.Where(p => regs.Any(r => r.Provedor == p)).ToList() };
+                bool mes = relPeriodo == Relatorio.Periodo.Mes;
+                var grafico = new Grafico { Ocupacao = mes ? 0.66f : 0.5f, Provedores = Consumo.Provedores.Where(p => regs.Any(r => r.Provedor == p)).ToList() };
+                var dias = new List<DateTime>();
                 for (var d = de; d <= ate; d = d.AddDays(1))
                 {
                     string chave = d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                    grafico.Dias.Add(d);
+                    int i = dias.Count;
+                    dias.Add(d);
                     grafico.Valores.Add(grafico.Provedores.Select(p => regs.Where(r => r.Dia == chave && r.Provedor == p).Sum(r => r.L.Total)).ToArray());
+                    // Eixo: o dia da semana na semana; no mês, 1, 5, 10, 15... e o último
+                    bool rotular = !mes || d.Day == 1 || d.Day % 5 == 0 || d == ate && d.Day % 5 > 1;
+                    grafico.Rotulos.Add(rotular ? (mes ? d.Day.ToString(cult) : d.ToString("ddd", cult)) : null);
+                    grafico.Nomes.Add(Util.Maiuscula(d.ToString("ddd " + cult.DateTimeFormat.MonthDayPattern, cult)));
+                    if (d == DateTime.Today) grafico.Destaque = i;
                 }
-                grafico.Abrir = d => { relPeriodo = Relatorio.Periodo.Dia; relDesloc = (int)(d - DateTime.Today).TotalDays; rolagem = 0; Invalidate(); };
-                blocos.Add(B("Por dia".T(), grafico, L("Clique num dia para ver só ele.".T())));
+                grafico.Clicavel = i => dias[i] <= DateTime.Today;
+                grafico.Abrir = i => { relPeriodo = Relatorio.Periodo.Dia; relDesloc = (int)(dias[i] - DateTime.Today).TotalDays; rolagem = 0; Invalidate(); };
+                blocos.Add(B("Por dia".T(), grafico, L("Clique num dia para ver as horas dele.".T())));
+            }
+            else
+            {
+                // Por hora: o livro guarda a hora desde a versão que trouxe este gráfico; antes disso, só o total do dia
+                var horas = Relatorio.PorHora(de);
+                var provs = Consumo.Provedores.Where(p => horas != null && horas.ContainsKey(p) && (relProvedor == null || relProvedor == p) && horas[p].Any(v => v > 0)).ToList();
+                if (horas == null || provs.Count == 0)
+                    blocos.Add(B("Por hora".T(), L("Este dia é de antes do registro por hora: só o total do dia ficou guardado.".T())));
+                else
+                {
+                    var grafico = new Grafico { Ocupacao = 0.62f, Provedores = provs };
+                    for (int hr = 0; hr < 24; hr++)
+                    {
+                        int hora = hr;
+                        grafico.Valores.Add(provs.Select(p => horas[p][hora]).ToArray());
+                        grafico.Rotulos.Add(hr % 6 == 0 ? hr.ToString("00") + ":00" : null);
+                        grafico.Nomes.Add(hr.ToString("00") + ":00–" + ((hr + 1) % 24).ToString("00") + ":00");
+                    }
+                    if (de == DateTime.Today) grafico.Destaque = DateTime.Now.Hour;
+                    // O dia em que a contagem por hora começou tem uso de antes dela, que só está no total
+                    bool parcial = grafico.Valores.Sum(v => v.Sum()) < total.Total * 0.98;
+                    blocos.Add(B("Por hora".T(), grafico, L(parcial ? "Parte do uso deste dia é de antes do registro por hora e aparece só no total.".T()
+                        : "Tokens em cada hora do dia, no horário deste computador.".T())));
+                }
             }
             if (relProvedor == null && regs.Select(r => r.Provedor).Distinct().Count() > 1)
                 blocos.Add(B("Por provedor".T(), Fatias(regs, r => r.Provedor, Relatorio.NomeProvedor, total.Total, true).ToArray()));
@@ -1239,31 +1482,35 @@ namespace Pulso
             }
         }
 
-        // Colunas por dia, empilhadas por provedor; o cursor sobre uma coluna mostra os números e o clique abre o dia
+        // Colunas empilhadas por provedor — os dias da semana ou do mês, ou as horas de um dia. O cursor sobre uma coluna
+        // mostra os números; nos dias, o clique abre o dia
         class Grafico : Linha
         {
-            public bool Mes; public List<string> Provedores;
-            public List<DateTime> Dias = new List<DateTime>();
+            public List<string> Provedores;
             public List<long[]> Valores = new List<long[]>();
-            public Action<DateTime> Abrir;
+            public List<string> Rotulos = new List<string>();   // eixo (nulo = coluna sem rótulo)
+            public List<string> Nomes = new List<string>();     // a coluna na legenda ("Ter 13 de outubro", "14:00–15:00")
+            public int Destaque = -1;                           // hoje ou a hora de agora: rótulo em destaque
+            public float Ocupacao = 0.5f;                       // quanto da vaga a coluna ocupa
+            public Func<int, bool> Clicavel;
+            public Action<int> Abrir;                           // nulo = sem clique
             float AlturaBarras(Configuracoes j) { return j.E(110); }
             public override float Altura(Configuracoes j, float w) { return j.E(12) + j.peq.Linha + j.E(10) + AlturaBarras(j) + j.E(6) + j.peq.Linha + j.E(10); }
             public override void Desenhar(Configuracoes j, Graphics g, float x, float y, float w, float h)
             {
-                var cult = Idioma.Cultura;
                 bool escuro = j.Escuro;
                 var fraco = Sobre(j.c.Text2, j.c.Group);
                 float xi = x + j.E(12), wi = w - j.E(24);
                 float topo = y + j.E(12) + j.peq.Linha + j.E(10), hb = AlturaBarras(j), base_ = topo + hb;
-                long max = Math.Max(1, Valores.Max(v => v.Sum()));
-                float vaga = wi / Dias.Count, larg = Math.Min(vaga * (Mes ? 0.66f : 0.5f), j.E(36));
+                long maior = Valores.Count == 0 ? 0 : Valores.Max(v => v.Sum()), max = Math.Max(1, maior);
+                float vaga = wi / Math.Max(1, Valores.Count), larg = Math.Min(vaga * Ocupacao, j.E(36));
 
                 int sob = -1;
-                for (int i = 0; i < Dias.Count; i++) if (j.Sobre("rel-dia:" + i)) sob = i;
+                for (int i = 0; i < Valores.Count; i++) if (j.Sobre("rel-col:" + i)) sob = i;
 
-                // Linha de base e, para cada dia com uso, a coluna empilhada
+                // Linha de base e, para cada coluna com uso, a pilha dos provedores
                 using (var pen = new Pen(Sobre(j.c.Sep, j.c.Group), Math.Max(1, j.E(1)))) g.DrawLine(pen, xi, base_, xi + wi, base_);
-                for (int i = 0; i < Dias.Count; i++)
+                for (int i = 0; i < Valores.Count; i++)
                 {
                     var vagaR = new RectangleF(xi + vaga * i, topo, vaga, hb);
                     if (i == sob) j.Preencher(g, RectangleF.Inflate(vagaR, -j.E(1), 0), j.E(5), Sobre(j.c.Hover, j.c.Group));
@@ -1287,28 +1534,25 @@ namespace Pulso
                         }
                         g.Restore(est);
                     }
-                    var dia = Dias[i];
-                    if (dia <= DateTime.Today) j.Registrar(vagaR, "rel-dia:" + i, delegate { Abrir(dia); }, true);
-                    // Eixo: o dia da semana na semana; no mês, 1, 5, 10, 15... e o último
-                    bool rotular = !Mes || dia.Day == 1 || dia.Day % 5 == 0 || i == Dias.Count - 1 && dia.Day % 5 > 1;
-                    if (rotular)
-                        Tx.Linha(g, j.peq, Mes ? dia.Day.ToString(cult) : dia.ToString("ddd", cult), dia == DateTime.Today ? j.c.Text : fraco, j.c.Group, cx, base_ + j.E(6), Tx.Alinhar.Centro, 0);
+                    int col = i;
+                    bool clica = Abrir != null && (Clicavel == null || Clicavel(i));
+                    // Sem clique, a coluna ainda registra a área: é o que faz a legenda mostrar os números dela
+                    j.Registrar(vagaR, "rel-col:" + i, clica ? (Action)delegate { Abrir(col); } : null, true);
+                    if (Rotulos[i] != null)
+                        Tx.Linha(g, j.peq, Rotulos[i], i == Destaque ? j.c.Text : fraco, j.c.Group, cx, base_ + j.E(6), Tx.Alinhar.Centro, 0);
                 }
 
-                // Legenda: o dia sob o cursor ou o pico do período; à direita, a cor de cada provedor
+                // Legenda: a coluna sob o cursor ou o pico; à direita, a cor de cada provedor
                 string legenda;
                 if (sob >= 0)
                 {
                     var partes = new List<string>();
                     for (int p = 0; p < Provedores.Count; p++) if (Valores[sob][p] > 0) partes.Add(Relatorio.NomeProvedor(Provedores[p]) + " " + Relatorio.Compacto(Valores[sob][p]));
-                    if (partes.Count < 2) partes.Clear(); // um provedor só no dia: o total já diz tudo
-                    legenda = Util.Maiuscula(Dias[sob].ToString("ddd " + cult.DateTimeFormat.MonthDayPattern, cult)) + ": " + "{0} tokens".T(Relatorio.Compacto(Valores[sob].Sum())) + (partes.Count > 0 ? " (" + string.Join(" · ", partes) + ")" : "");
+                    if (partes.Count < 2) partes.Clear(); // um provedor só: o total já diz tudo
+                    legenda = Nomes[sob] + ": " + "{0} tokens".T(Relatorio.Compacto(Valores[sob].Sum())) + (partes.Count > 0 ? " (" + string.Join(" · ", partes) + ")" : "");
                 }
-                else
-                {
-                    int pico = Valores.FindIndex(v => v.Sum() == max);
-                    legenda = "Pico: {0}, {1} tokens".T(Dias[pico].ToString(cult.DateTimeFormat.MonthDayPattern, cult), Relatorio.Compacto(max));
-                }
+                else if (maior > 0) legenda = "Pico: {0}, {1} tokens".T(Nomes[Valores.FindIndex(v => v.Sum() == maior)], Relatorio.Compacto(maior));
+                else legenda = "Nada registrado neste período.".T();
                 float xl = xi + wi;
                 if (Provedores.Count > 1)
                     for (int p = Provedores.Count - 1; p >= 0; p--)
@@ -1322,6 +1566,60 @@ namespace Pulso
                     }
                 Tx.Linha(g, j.peq, legenda, sob >= 0 ? j.c.Text : fraco, j.c.Group, xi, y + j.E(12), Tx.Alinhar.Esquerda, xl - xi - j.E(8));
             }
+        }
+
+        // ---------- período dos relatórios ----------
+        // "Hoje · 13 de outubro", "Ontem · 12 de outubro", "Esta semana · 12 de outubro a 18 de outubro", "Mês passado · Setembro de 2026"
+        string NomeDoPeriodo(Relatorio.Periodo p, int desloc)
+        {
+            DateTime de, ate;
+            Relatorio.Intervalo(p, Relatorio.Referencia(p, desloc), out de, out ate);
+            var cult = Idioma.Cultura;
+            if (p == Relatorio.Periodo.Dia)
+                return desloc == 0 ? "Hoje".T() + " · " + de.ToString(cult.DateTimeFormat.MonthDayPattern, cult)
+                    : desloc == -1 ? "Ontem".T() + " · " + de.ToString(cult.DateTimeFormat.MonthDayPattern, cult)
+                    : Relatorio.Titulo(p, de, ate, desloc);
+            string datas = Relatorio.Titulo(p, de, ate, desloc);
+            string rel = p == Relatorio.Periodo.Semana
+                ? (desloc == 0 ? "Esta semana".T() : desloc == -1 ? "Semana passada".T() : null)
+                : (desloc == 0 ? "Este mês".T() : desloc == -1 ? "Mês passado".T() : null);
+            return rel == null ? datas : rel + " · " + datas;
+        }
+
+        // Quantos períodos antes do atual fica a data 'refe' (0 = o atual)
+        static int DeslocDe(Relatorio.Periodo p, DateTime refe)
+        {
+            var hoje = DateTime.Today;
+            refe = refe.Date;
+            if (p == Relatorio.Periodo.Dia) return (int)(refe - hoje).TotalDays;
+            if (p == Relatorio.Periodo.Mes) return (refe.Year * 12 + refe.Month) - (hoje.Year * 12 + hoje.Month);
+            DateTime a, b, x;
+            Relatorio.Intervalo(p, refe, out a, out x);
+            Relatorio.Intervalo(p, hoje, out b, out x);
+            return (int)Math.Round((a - b).TotalDays / 7);
+        }
+
+        // A lista dos últimos 31 dias, 16 semanas ou 13 meses (o que o livro guarda), com o total de cada um ao lado
+        void MenuDePeriodos()
+        {
+            int n = relPeriodo == Relatorio.Periodo.Dia ? 31 : relPeriodo == Relatorio.Periodo.Semana ? 16 : 13;
+            var m = new ContextMenuStrip();
+            Bandeja.Estilizar(m);
+            for (int d = 0; d > -n; d--)
+            {
+                DateTime de, ate;
+                Relatorio.Intervalo(relPeriodo, Relatorio.Referencia(relPeriodo, d), out de, out ate);
+                var regs = Relatorio.Registros(de, ate, false);
+                long total = Relatorio.Soma(relProvedor == null ? regs : regs.Where(r => r.Provedor == relProvedor)).Total;
+                int desloc = d;
+                m.Items.Add(new ToolStripMenuItem(NomeDoPeriodo(relPeriodo, d), null, delegate { relDesloc = desloc; rolagem = 0; Invalidate(); })
+                {
+                    Checked = d == relDesloc,
+                    ShortcutKeyDisplayString = total > 0 ? "{0} tokens".T(Relatorio.Compacto(total)) : "sem uso".T(),
+                });
+            }
+            m.Closed += delegate { BeginInvoke((Action)m.Dispose); };
+            m.Show(System.Windows.Forms.Cursor.Position);
         }
 
         // ---------- interação ----------
@@ -1343,7 +1641,8 @@ namespace Pulso
             if (segurando != null && segurando.Arrastar != null) { segurando.Arrastar(e.X); return; }
             var a = AlvoEm(e.Location);
             string id = a != null ? a.Id : null;
-            Cursor = a != null ? Cursors.Hand : Cursors.Default;
+            // Área só de passar o cursor (coluna de hora no gráfico) não é clicável: sem a mãozinha
+            Cursor = a != null && (a.Clique != null || a.Arrastar != null) ? Cursors.Hand : Cursors.Default;
             if (id != sobre) { sobre = id; Invalidate(); }
         }
 

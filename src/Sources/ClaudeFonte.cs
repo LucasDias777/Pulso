@@ -17,6 +17,7 @@ namespace Pulso
             public DateTime Inicio;         // início da janela (renova − duração) ou o momento da leitura
             public DateTime Quando;
             public double CustoJanela = double.NaN; // custo local de Inicio até a leitura (NaN = índice ainda não pronto)
+            public double Adiantado;                // o que a estimativa já tinha passado do % inteiro da leitura (ver Adiantado)
         }
 
         // Ponto de partida da calibração de cada janela: a leitura exata e o custo ao vivo deste computador até ela
@@ -91,10 +92,14 @@ namespace Pulso
         void AplicarExata(Dictionary<string, Janela> janelas, string fonte, bool mesclar)
         {
             var agora = DateTime.UtcNow;
+            var antes = new Dictionary<string, Janela>();
+            lock (Estado.Trava) foreach (var j in Estado.Claude.Janelas) antes[j.Id] = j.Copia();
             lock (travaAncoras)
                 foreach (var kv in janelas)
                 {
                     var a = NovaAncora(kv.Value, agora);
+                    Janela anterior;
+                    if (antes.TryGetValue(kv.Key, out anterior)) a.Adiantado = Adiantado(anterior, kv.Value);
                     if (transcritos.Pronto) { a.CustoJanela = transcritos.CustoDesde(a.Inicio); Calibrar(kv.Key, kv.Value); }
                     ancoras[kv.Key] = a;
                 }
@@ -123,6 +128,24 @@ namespace Pulso
             }
             Recalcular();
             EstadoSalvo.Gravar();
+        }
+
+        // O servidor dá % inteiro e corta a fração: com 0,7% de uso ele ainda diz 0%. Recomeçar do inteiro jogava fora o
+        // que a estimativa já sabia — no começo da janela o anel ia de ~0,4% a 0% a cada leitura e só voltava a subir
+        // quando o servidor dizia 1%, com o uso já perto de 1,4%. Fica a fração que a estimativa tinha, até logo abaixo do
+        // próximo inteiro: é o valor mais perto dela que a leitura ainda permite. Voltar ao inteiro quando ela passava de
+        // um ponto (calibração alta) zerava o anel do mesmo jeito; segurando em 0,99, a tela continua em "~1%".
+        // Simulado com o servidor cortando e arredondando e a calibração 50% alta e baixa: nenhum zero.
+        static double Adiantado(Janela antes, Janela agora)
+        {
+            if (!antes.Estimado.HasValue) return 0;
+            double pct = agora.Usado * 100;
+            if (Math.Abs(pct - Math.Round(pct)) > 1e-6) return 0;                                  // leitura com fração já é exata
+            if (agora.Usado < antes.Usado - 0.005) return 0;                                       // renovou
+            if (antes.ResetaEm.HasValue && (!agora.ResetaEm.HasValue || Math.Abs((agora.ResetaEm.Value - antes.ResetaEm.Value).TotalMinutes) > 60))
+                return 0;                                                                          // outra janela
+            double sobra = antes.Estimado.Value - agora.Usado;
+            return sobra > 0 ? Math.Min(sobra, 0.0099) : 0;
         }
 
         // Índice completo: as âncoras de antes ganham o custo da janela (a estimativa volta a andar com o k salvo);
@@ -178,7 +201,7 @@ namespace Pulso
 
         static Referencia Ref(Janela j, double custo) { return new Referencia { Usado = j.Usado, Custo = custo, Reset = j.ResetaEm }; }
 
-        // Estimativa = % exato + k × custo gasto depois da leitura, na mesma janela
+        // Estimativa = % exato + fração mantida da estimativa anterior + k × custo gasto depois da leitura, na mesma janela
         void Recalcular()
         {
             bool usar = Config.Atual.Estimativa;
@@ -189,7 +212,7 @@ namespace Pulso
                     double k;
                     lock (EstadoSalvo.Calibracao) EstadoSalvo.Calibracao.TryGetValue(kv.Key, out k);
                     if (!usar || k <= 0 || double.IsNaN(kv.Value.CustoJanela)) continue;
-                    extras[kv.Key] = k * Math.Max(0, transcritos.CustoDesde(kv.Value.Inicio) - kv.Value.CustoJanela);
+                    extras[kv.Key] = kv.Value.Adiantado + k * Math.Max(0, transcritos.CustoDesde(kv.Value.Inicio) - kv.Value.CustoJanela);
                 }
             lock (Estado.Trava)
             {

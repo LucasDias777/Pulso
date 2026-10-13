@@ -172,7 +172,6 @@ namespace Pulso
             { "Custo equivalente", "Equivalent cost", "Costo equivalente" },
             { "Entrada {0} · cache lido {1} · cache gravado {2} · saída {3}, com {4} de raciocínio", "Input {0} · cache read {1} · cache written {2} · output {3}, including {4} of reasoning", "Entrada {0} · caché leída {1} · caché escrita {2} · salida {3}, con {4} de razonamiento" },
             { "Por dia", "By day", "Por día" },
-            { "Clique num dia para ver só ele.", "Click a day to see just that day.", "Haz clic en un día para verlo solo." },
             { "Pico: {0}, {1} tokens", "Peak: {0}, {1} tokens", "Pico: {0}, {1} tokens" },
             { "{0} tokens", "{0} tokens", "{0} tokens" },
             { "Por provedor", "By provider", "Por proveedor" },
