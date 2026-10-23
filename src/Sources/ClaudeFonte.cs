@@ -36,6 +36,7 @@ namespace Pulso
             servidor = new ClaudeServidor(HaSessaoAtiva);
             EstadoSalvo.EsperaClaude = () => servidor.EsperaAte;
             servidor.LeituraExata += janelas => AplicarExata(janelas, "servidor", false);
+            servidor.ContaTrocada += NovaConta;
 
             transcritos.AtividadePeloArquivo = !registro.Disponivel;
             transcritos.NovoCusto += Recalcular;
@@ -62,6 +63,21 @@ namespace Pulso
             var inicio = j.ResetaEm.HasValue && j.Minutos > 0 ? j.ResetaEm.Value.AddMinutes(-j.Minutos) : quando;
             if (inicio > quando) inicio = quando;
             return new Ancora { Usado = j.Usado, Inicio = inicio, Quando = quando };
+        }
+
+        // Outra conta (ou plano) no Claude Code, ou conta ainda não anotada: o % da tela, as âncoras e os pontos de partida
+        // da calibração não são dela. Fica sem número até a primeira leitura da nova (pedida na hora pelo servidor)
+        void NovaConta()
+        {
+            lock (travaAncoras) { ancoras.Clear(); referencias.Clear(); }
+            lock (Estado.Trava)
+            {
+                var p = Estado.Claude;
+                p.Janelas.Clear();
+                p.Confirmado = null; p.Fonte = null; p.Plano = null; p.RitmoHora = null; p.Nota = null; p.Erro = null;
+                p.Conta++;
+            }
+            Estado.Avisar();
         }
 
         bool HaSessaoAtiva()
@@ -180,7 +196,11 @@ namespace Pulso
             }
             double sobe = j.Usado - r.Usado, gasto = custo - r.Custo;
             double k0;
-            lock (EstadoSalvo.Calibracao) EstadoSalvo.Calibracao.TryGetValue(id, out k0);
+            bool provisorio;
+            lock (EstadoSalvo.Calibracao) { EstadoSalvo.Calibracao.TryGetValue(id, out k0); provisorio = EstadoSalvo.Provisoria.Contains(id); }
+            // O k de partida do plano não é medida: não decide se o salto veio de outro computador, e a primeira medida o
+            // troca de vez (com o k do Max 5x salvo, a semana do Pro, 4x maior, nunca era aprendida)
+            if (provisorio) k0 = 0;
             // Subiu mais do que o gasto daqui explica: uso de outro computador; recomeça desta leitura
             if (gasto < 0.05 ? sobe >= 0.02 : k0 > 0 && sobe > 3 * k0 * gasto + 0.02)
             {
@@ -195,7 +215,7 @@ namespace Pulso
             if (k0 <= 0 || kNovo < k0 / 3) k = kNovo;   // primeira, ou a anterior estava inflada: troca de vez
             else if (kNovo > k0 * 3) return;             // salto que o uso de fora não explicou: não ensina
             else k = k0 * 0.4 + kNovo * 0.6;
-            lock (EstadoSalvo.Calibracao) EstadoSalvo.Calibracao[id] = k;
+            lock (EstadoSalvo.Calibracao) { EstadoSalvo.Calibracao[id] = k; EstadoSalvo.Provisoria.Remove(id); }
             Log.Info("claude: calibração " + id + " = " + k.ToString("0.00000") + " (+" + Math.Round(sobe * 100) + " pontos / US$" + gasto.ToString("0.00") + " gastos aqui)");
         }
 

@@ -22,6 +22,7 @@ namespace Pulso
         readonly Dictionary<string, Atividade> estadoSessao = new Dictionary<string, Atividade>();
         readonly Dictionary<string, DateTime> trabalhandoDesde = new Dictionary<string, DateTime>();
         readonly Dictionary<string, DateTime> ritmoAvisado = new Dictionary<string, DateTime>();   // janela → renovação já avisada
+        readonly Dictionary<string, int> contaVista = new Dictionary<string, int>();
         static readonly double[] Limiares = { 0.80, 0.95, 1.0 };
         // Leitura restaurada do disco ao abrir não serve de "antes": comparar com ela inventa renovação
         readonly DateTime abertura = DateTime.UtcNow;
@@ -39,10 +40,20 @@ namespace Pulso
             foreach (var id in cfg.Provedores)
             {
                 var p = Estado.Copia(id);
+                Esquecer(p);
                 if (p.Confirmado.HasValue && p.Confirmado.Value >= abertura) Janelas(p, cfg, pal);
                 if (cfg.AvisoRitmo) RitmoAlto(p, pal);
                 Sessoes(p, cfg, pal);
             }
+        }
+
+        // Outra conta entrou: o uso visto era da anterior; comparar com ele inventava renovação (55% → 5%)
+        void Esquecer(Provedor p)
+        {
+            int c;
+            if (contaVista.TryGetValue(p.Id, out c) && c != p.Conta)
+                foreach (var k in visto.Keys.Where(k => k.StartsWith(p.Id + "|")).ToList()) visto.Remove(k);
+            contaVista[p.Id] = p.Conta;
         }
 
         void Janelas(Provedor p, Config cfg, Paleta pal)

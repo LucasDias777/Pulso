@@ -122,6 +122,17 @@ namespace Pulso
             }
         }
 
+        // Primeiro dia com hora no livro (a hora entrou numa versão do Pulso); nulo se nenhum
+        public DateTime? InicioDasHoras
+        {
+            get
+            {
+                string m = null;
+                lock (trava) foreach (var k in horas.Keys) if (m == null || string.CompareOrdinal(k, m) < 0) m = k;
+                return m == null ? (DateTime?)null : DateTime.ParseExact(m, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+        }
+
         public void IniciarReconstrucao() { lock (trava) { relido = new Dias(); horasRelidas = new Dictionary<string, Linha[]>(); } }
 
         static bool Vence(Linha relida, Linha atual)

@@ -312,7 +312,7 @@ namespace Pulso
             foreach (var m in new[] { Modo.Instalar, Modo.AtualizarPorCima, Modo.Atualizar, Modo.Desinstalar })
             {
                 // Na tela, quase transparente: fora dela o Windows 11 não compõe a janela e a foto sai velha ou em branco
-                using (var a = new Assistente(m, "1.3", "1.4") { StartPosition = FormStartPosition.Manual, Location = Screen.PrimaryScreen.WorkingArea.Location, ShowInTaskbar = false, Opacity = 0.02 })
+                using (var a = new Assistente(m, "1.4", "1.5") { StartPosition = FormStartPosition.Manual, Location = Screen.PrimaryScreen.WorkingArea.Location, ShowInTaskbar = false, Opacity = 0.02 })
                 {
                     a.Show();
                     string n = m.ToString().ToLowerInvariant();

@@ -21,7 +21,7 @@ namespace Pulso
     // próprio exe com --desinstalar). Instalar, atualizar e desinstalar passam pelo Assistente: nenhum console à vista.
     static class Instalacao
     {
-        public const string Versao = "1.4";
+        public const string Versao = "1.5";
         const string ChaveApp = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pulso";
 
         public static string Pasta

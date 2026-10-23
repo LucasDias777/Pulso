@@ -62,6 +62,7 @@ namespace Pulso
         public bool Presente = true;   // ferramenta instalada/conectada neste computador
         public string Ausencia;        // por que não está conectado ("não instalado", "sem login"…)
         public string Detalhe;         // linha extra no cartão (ex.: conta pessoal sem cota publicada)
+        public int Conta;              // muda quando outra conta entra: o que se viu da anterior não serve de comparação
 
         public Janela PorId(string id)
         {
@@ -119,7 +120,7 @@ namespace Pulso
 
         public Provedor Copia()
         {
-            var p = new Provedor { Id = Id, Nome = Nome, Confirmado = Confirmado, Fonte = Fonte, Plano = Plano, Nota = Nota, Erro = Erro, RitmoHora = RitmoHora, Presente = Presente, Ausencia = Ausencia, Detalhe = Detalhe };
+            var p = new Provedor { Id = Id, Nome = Nome, Confirmado = Confirmado, Fonte = Fonte, Plano = Plano, Nota = Nota, Erro = Erro, RitmoHora = RitmoHora, Presente = Presente, Ausencia = Ausencia, Detalhe = Detalhe, Conta = Conta };
             foreach (var j in Janelas) p.Janelas.Add(j.Copia());
             foreach (var kv in Sessoes) p.Sessoes[kv.Key] = kv.Value.Copia();
             return p;

@@ -27,6 +27,15 @@ namespace Pulso
         public static string ClaudeProjetos { get { return Path.Combine(ClaudeDir, "projects"); } }
         public static string ClaudeCredenciais { get { return Path.Combine(ClaudeDir, ".credentials.json"); } }
         public static string ClaudeSettings { get { return Path.Combine(ClaudeDir, "settings.json"); } }
+        // Conta logada (oauthAccount): fica em ~/.claude.json, fora da pasta .claude, ou dentro de CLAUDE_CONFIG_DIR
+        public static string ClaudeConta
+        {
+            get
+            {
+                string v = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+                return Path.Combine(string.IsNullOrEmpty(v) ? Home : v, ".claude.json");
+            }
+        }
 
         public static string CodexDir
         {

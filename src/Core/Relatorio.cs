@@ -98,6 +98,48 @@ namespace Pulso
             return algum ? r : null;
         }
 
+        // Tokens de cada dia de 'de' a 'ate' (da memória), de todos os provedores ou de um só
+        public static Dictionary<DateTime, long> TotaisPorDia(DateTime de, DateTime ate, string provedor)
+        {
+            var r = new Dictionary<DateTime, long>();
+            foreach (var reg in Registros(de, ate, false))
+            {
+                if (provedor != null && reg.Provedor != provedor) continue;
+                var d = Data(reg);
+                long v;
+                r.TryGetValue(d, out v);
+                r[d] = v + reg.L.Total;
+            }
+            return r;
+        }
+
+        // Desde quando algum provedor tem hora: dia sem hora depois disso é dia sem uso, não dia de antes do registro
+        public static DateTime? InicioDasHoras
+        {
+            get
+            {
+                DateTime? r = null;
+                foreach (var p in Consumo.Provedores)
+                {
+                    var d = Consumo.De(p).InicioDasHoras;
+                    if (d.HasValue && (!r.HasValue || d.Value < r.Value)) r = d;
+                }
+                return r;
+            }
+        }
+
+        // As 24 horas de um dia somadas entre os provedores (ou de um só); null se o dia não tem hora
+        public static long[] HorasDoDia(DateTime dia, string provedor)
+        {
+            var h = PorHora(dia);
+            if (h == null) return null;
+            var t = new long[24];
+            foreach (var kv in h)
+                if (provedor == null || kv.Key == provedor)
+                    for (int i = 0; i < 24; i++) t[i] += kv.Value[i];
+            return t;
+        }
+
         public static Consumo.Linha Soma(IEnumerable<Registro> rs)
         {
             var t = new Consumo.Linha();
@@ -261,6 +303,66 @@ namespace Pulso
         }
 
         static string E(string s) { return WebUtility.HtmlEncode(s); }
+
+        // ---------- aba Gráficos ----------
+        // Os números de cada gráfico em formato longo (gráfico; item; série; valor), que a planilha vira tabela dinâmica.
+        // Cada linha: { gráfico, item, série, valor } — valor long (tokens), double (US$) ou texto ("+14%", "Qua 21")
+        public static string CsvGraficos(List<object[]> linhas)
+        {
+            var br = new CultureInfo("pt-BR");
+            var sb = new StringBuilder("grafico;item;serie;valor\r\n");
+            foreach (var l in linhas)
+            {
+                object v = l[3];
+                string valor = v is long ? ((long)v).ToString(br) : v is double ? ((double)v).ToString("0.######", br) : CampoCsv(Convert.ToString(v, br));
+                sb.Append(CampoCsv((string)l[0])).Append(';').Append(CampoCsv((string)l[1])).Append(';').Append(CampoCsv((string)l[2])).Append(';').Append(valor).Append("\r\n");
+            }
+            return sb.ToString();
+        }
+
+        // Os gráficos como aparecem na janela (PNG em base64, na largura dada em px) e, embaixo, a tabela de cada um
+        public static string HtmlGraficos(List<object[]> linhas, string titulo, string png, int largura)
+        {
+            var cult = Idioma.Cultura;
+            var sb = new StringBuilder();
+            sb.Append("<!doctype html><html lang=\"").Append(cult.Name).Append("\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+            sb.Append("<title>").Append(E("Gráficos".T())).Append(" · ").Append(E(titulo)).Append("</title><style>").Append(Estilo)
+              .Append(".foto{display:block;max-width:100%;height:auto;border-radius:12px;border:1px solid var(--linha);margin:20px 0 8px}</style></head><body><main>");
+            sb.Append("<h1>").Append(E("Gráficos".T())).Append(" <span>").Append(E(titulo)).Append("</span></h1>");
+            sb.Append("<p class=\"nota\">").Append(E("Tokens das respostas registradas pelo Claude Code e pelo Codex neste computador. Gerado em {0}.".T(DateTime.Now.ToString("g", cult)))).Append("</p>");
+            if (png != null) sb.Append("<img class=\"foto\" style=\"width:").Append(largura).Append("px\" alt=\"").Append(E("Gráficos".T())).Append("\" src=\"data:image/png;base64,").Append(png).Append("\">");
+            foreach (var grafico in linhas.Select(l => (string)l[0]).Distinct())
+            {
+                sb.Append("<h2>").Append(E(grafico)).Append("</h2>");
+                Pivo(sb, linhas.Where(l => (string)l[0] == grafico).ToList());
+            }
+            sb.Append("</main></body></html>");
+            return sb.ToString();
+        }
+
+        // Itens nas linhas e séries nas colunas, na ordem em que entraram
+        static void Pivo(StringBuilder sb, List<object[]> ls)
+        {
+            var series = ls.Select(l => (string)l[2]).Distinct().ToList();
+            var itens = ls.Select(l => (string)l[1]).Distinct().ToList();
+            var valores = new Dictionary<string, object>();
+            foreach (var l in ls) valores[(string)l[1] + "\u0001" + (string)l[2]] = l[3];
+            sb.Append("<div class=\"rolagem\"><table><thead><tr><th></th>");
+            foreach (var s in series) sb.Append("<th>").Append(E(s.Length == 0 ? "Valor".T() : s)).Append("</th>");
+            sb.Append("</tr></thead><tbody>");
+            foreach (var it in itens)
+            {
+                sb.Append("<tr><td>").Append(E(it)).Append("</td>");
+                foreach (var s in series)
+                {
+                    object v;
+                    valores.TryGetValue(it + "\u0001" + s, out v);
+                    sb.Append("<td>").Append(v == null ? "–" : E(v is long ? ((long)v).ToString("N0", Idioma.Cultura) : v is double ? ((double)v).ToString("N2", Idioma.Cultura) : Convert.ToString(v, Idioma.Cultura))).Append("</td>");
+                }
+                sb.Append("</tr>");
+            }
+            sb.Append("</tbody></table></div>");
+        }
 
         const string Estilo =
             ":root{--fundo:#f7f7f5;--papel:#fff;--texto:#1d1d1f;--fraco:#6e6e73;--linha:#e6e6e3;--barra:#d9e7ff;color-scheme:light dark}" +

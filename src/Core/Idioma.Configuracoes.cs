@@ -186,7 +186,7 @@ namespace Pulso
             { "Exportar", "Export", "Exportar" },
             { "Salvar CSV…", "Save CSV…", "Guardar CSV…" },
             { "Abrir no navegador", "Open in browser", "Abrir en el navegador" },
-            { "Conta o uso deste computador, lido dos registros do Claude Code e do Codex e guardado por 13 meses. A porcentagem é a fatia dos tokens do período (entrada, cache e saída); US$ é o preço de API equivalente, não uma cobrança.", "Counts the usage on this computer, read from the Claude Code and Codex logs and kept for 13 months. The percentage is the share of the period's tokens (input, cache and output); US$ is the equivalent API price, not a charge.", "Cuenta el uso de este equipo, leído de los registros de Claude Code y Codex y guardado durante 13 meses. El porcentaje es la parte de los tokens del período (entrada, caché y salida); US$ es el precio de API equivalente, no un cobro." },
+            { "Uso deste computador, guardado por 13 meses. US$ é o preço de API equivalente, não uma cobrança.", "Usage on this computer, kept for 13 months. US$ is the equivalent API price, not a charge.", "Uso de este equipo, guardado por 13 meses. US$ es el precio de API equivalente, no un cobro." },
             { "Consumo", "Usage", "Consumo" },
             { "Tokens das respostas registradas pelo Claude Code e pelo Codex neste computador. Gerado em {0}.", "Tokens from the responses recorded by Claude Code and Codex on this computer. Generated on {0}.", "Tokens de las respuestas registradas por Claude Code y Codex en este equipo. Generado el {0}." },
             { "Modelo", "Model", "Modelo" },
