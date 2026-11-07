@@ -18,10 +18,24 @@ namespace Pulso
             public DateTime Quando;
             public double CustoJanela = double.NaN; // custo local de Inicio até a leitura (NaN = índice ainda não pronto)
             public double Adiantado;                // o que a estimativa já tinha passado do % inteiro da leitura (ver Adiantado)
+            public string Modelo;                   // ver ModeloDa
+            public double BaseModelo;               // custo ao vivo desse modelo na leitura
         }
 
         // Ponto de partida da calibração de cada janela: a leitura exata e o custo ao vivo deste computador até ela
-        class Referencia { public double Usado, Custo; public DateTime? Reset; }
+        class Referencia { public double Usado, Custo; public DateTime? Reset; public string Modelo; }
+
+        // Modelos que a janela mede: nula = todos (sessão e semana); a família dele numa janela semanal de um modelo só; vazia =
+        // de um modelo só sem saber qual. A do modelo andava com o custo de todos: na conta Max, usando o Opus, a "Semana (por
+        // modelo)" do Fable ia a "~2%" com 0% exato
+        static string ModeloDa(Janela j)
+        {
+            if (j.Modelo != null) return j.Modelo;
+            return j.Id == "session" || j.Id == "weekly_all" ? null : "";
+        }
+
+        // Custo ao vivo que move a janela: o de todos os modelos, ou só o do modelo dela
+        double CustoAoVivo(string modelo) { return modelo == null ? transcritos.CustoAoVivo : transcritos.CustoAoVivoDe(modelo); }
 
         readonly ClaudeSessoes transcritos = new ClaudeSessoes();
         readonly ClaudeRegistro registro = new ClaudeRegistro();
@@ -58,11 +72,12 @@ namespace Pulso
             relogio = new Timer(delegate { Virada(); }, null, 2000, 2000);
         }
 
-        static Ancora NovaAncora(Janela j, DateTime quando)
+        Ancora NovaAncora(Janela j, DateTime quando)
         {
             var inicio = j.ResetaEm.HasValue && j.Minutos > 0 ? j.ResetaEm.Value.AddMinutes(-j.Minutos) : quando;
             if (inicio > quando) inicio = quando;
-            return new Ancora { Usado = j.Usado, Inicio = inicio, Quando = quando };
+            string modelo = ModeloDa(j);
+            return new Ancora { Usado = j.Usado, Inicio = inicio, Quando = quando, Modelo = modelo, BaseModelo = string.IsNullOrEmpty(modelo) ? 0 : CustoAoVivo(modelo) };
         }
 
         // Outra conta (ou plano) no Claude Code, ou conta ainda não anotada: o % da tela, as âncoras e os pontos de partida
@@ -185,11 +200,14 @@ namespace Pulso
         // é um computador por vez, então o salto feito no outro fica dentro da leitura exata e não ensina nada.
         void Calibrar(string id, Janela j)
         {
-            double custo = transcritos.CustoAoVivo;
+            // Janela de um modelo só: o k sai do custo desse modelo; sem saber qual, o gasto daqui não se atribui
+            string modelo = ModeloDa(j);
+            if (modelo != null && modelo.Length == 0) return;
+            double custo = CustoAoVivo(modelo);
             Referencia r;
             referencias.TryGetValue(id, out r);
-            // Primeira leitura, janela renovada ou outra janela: só marca o ponto de partida
-            if (r == null || j.Usado < r.Usado - 0.005 || (j.ResetaEm.HasValue && r.Reset.HasValue && Math.Abs((j.ResetaEm.Value - r.Reset.Value).TotalMinutes) > 60))
+            // Primeira leitura, janela renovada, outra janela ou outro modelo: só marca o ponto de partida
+            if (r == null || r.Modelo != modelo || j.Usado < r.Usado - 0.005 || (j.ResetaEm.HasValue && r.Reset.HasValue && Math.Abs((j.ResetaEm.Value - r.Reset.Value).TotalMinutes) > 60))
             {
                 referencias[id] = Ref(j, custo);
                 return;
@@ -219,7 +237,7 @@ namespace Pulso
             Log.Info("claude: calibração " + id + " = " + k.ToString("0.00000") + " (+" + Math.Round(sobe * 100) + " pontos / US$" + gasto.ToString("0.00") + " gastos aqui)");
         }
 
-        static Referencia Ref(Janela j, double custo) { return new Referencia { Usado = j.Usado, Custo = custo, Reset = j.ResetaEm }; }
+        static Referencia Ref(Janela j, double custo) { return new Referencia { Usado = j.Usado, Custo = custo, Reset = j.ResetaEm, Modelo = ModeloDa(j) }; }
 
         // Estimativa = % exato + fração mantida da estimativa anterior + k × custo gasto depois da leitura, na mesma janela
         void Recalcular()
@@ -231,8 +249,17 @@ namespace Pulso
                 {
                     double k;
                     lock (EstadoSalvo.Calibracao) EstadoSalvo.Calibracao.TryGetValue(kv.Key, out k);
-                    if (!usar || k <= 0 || double.IsNaN(kv.Value.CustoJanela)) continue;
-                    extras[kv.Key] = kv.Value.Adiantado + k * Math.Max(0, transcritos.CustoDesde(kv.Value.Inicio) - kv.Value.CustoJanela);
+                    var a = kv.Value;
+                    if (!usar || k <= 0) continue;
+                    double gasto;
+                    if (a.Modelo == null)
+                    {
+                        if (double.IsNaN(a.CustoJanela)) continue;
+                        gasto = transcritos.CustoDesde(a.Inicio) - a.CustoJanela;
+                    }
+                    else if (a.Modelo.Length == 0) continue;      // de um modelo que não se sabe qual: só o número exato
+                    else gasto = transcritos.CustoAoVivoDe(a.Modelo) - a.BaseModelo;
+                    extras[kv.Key] = a.Adiantado + k * Math.Max(0, gasto);
                 }
             lock (Estado.Trava)
             {
@@ -268,7 +295,11 @@ namespace Pulso
                     if (!j.ResetaEm.HasValue || j.ResetaEm.Value > agora) continue;
                     j.Usado = 0; j.Estimado = null; j.ResetaEm = null;
                     lock (travaAncoras)
-                        ancoras[j.Id] = new Ancora { Usado = 0, Inicio = agora, Quando = agora, CustoJanela = transcritos.Pronto ? transcritos.CustoDesde(agora) : double.NaN };
+                    {
+                        var a = NovaAncora(j, agora);
+                        a.CustoJanela = transcritos.Pronto ? transcritos.CustoDesde(agora) : double.NaN;
+                        ancoras[j.Id] = a;
+                    }
                     mudou = true;
                 }
                 // Sessão concluída some da lista depois de 30 min

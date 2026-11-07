@@ -29,6 +29,8 @@ namespace Pulso
         Dictionary<string, long> posicoesSalvas = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         bool mudouDesdeSalvar;
         double custoAoVivo;                      // soma do custo das respostas recentes desde que o Pulso abriu
+        // O mesmo, por modelo (id do transcrito em minúsculas): a janela semanal de um modelo só anda com o custo dele
+        readonly Dictionary<string, double> aoVivoPorModelo = new Dictionary<string, double>();
 
         public event Action NovoCusto;           // uma resposta recente entrou no índice
         public event Action FimDeTurno;          // uma sessão principal terminou de responder (agora)
@@ -127,7 +129,14 @@ namespace Pulso
                 double v;
                 porMinuto.TryGetValue(min, out v);
                 porMinuto[min] = v + delta;
-                if (recente) custoAoVivo += delta;
+                if (recente)
+                {
+                    custoAoVivo += delta;
+                    string id = (modelo ?? "").ToLowerInvariant();
+                    double c;
+                    aoVivoPorModelo.TryGetValue(id, out c);
+                    aoVivoPorModelo[id] = c + delta;
+                }
                 Projetos.Claude.Somar(quando, pasta, delta);
             }
             if (recente)
@@ -140,6 +149,24 @@ namespace Pulso
         // Custo das respostas gravadas neste computador desde que o Pulso abriu (só cresce): a diferença entre
         // duas leituras exatas é o que foi gasto aqui entre elas, sem o atrasado e sem contar um minuto duas vezes
         public double CustoAoVivo { get { lock (trava) return custoAoVivo; } }
+
+        // O mesmo, só dos modelos da família ("fable" soma claude-fable-5-1 e qualquer outra versão dele)
+        public double CustoAoVivoDe(string familia)
+        {
+            double soma = 0;
+            lock (trava) foreach (var kv in aoVivoPorModelo) if (kv.Key.Contains(familia)) soma += kv.Value;
+            return soma;
+        }
+
+        // Família do modelo pelo nome que o servidor dá à janela semanal dele ("Fable", "Opus 5.5"): a primeira palavra que
+        // não seja "Claude", em minúsculas. Nula se não houver nome
+        public static string Familia(string nome)
+        {
+            if (string.IsNullOrEmpty(nome)) return null;
+            foreach (var p in nome.ToLowerInvariant().Split(new[] { ' ', '-', '_', '.' }, StringSplitOptions.RemoveEmptyEntries))
+                if (p != "claude" && p.Length >= 3 && p.All(char.IsLetter)) return p;
+            return null;
+        }
 
         // Custo gasto a partir de um instante (resolução de 1 minuto)
         public double CustoDesde(DateTime inicioUtc)

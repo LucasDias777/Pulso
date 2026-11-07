@@ -828,7 +828,10 @@ namespace Pulso
                 using (var ic = Glifos.Caminho(p.Id, x + 8 * sCartao, y + hTit / 2, 16 * sCartao))
                 using (var b = new SolidBrush(pal.Tinta2)) g.FillPath(b, ic);
                 Escrever(g, p.Nome, fTitulo, pal.Tinta, x + 24 * sCartao, y, w - 24 * sCartao, hTit, StringAlignment.Near);
-                if (p.Plano != null) Escrever(g, p.Plano.T(), fPeq, pal.TintaFraca, x, y, w, hTit, StringAlignment.Far, fTitulo);
+                // O plano fica à direita, no espaço depois do nome: plano de nome longo ("Academic Researchers Plus") ganha
+                // "…" em vez de cobrir o "Codex"
+                float xPlano = x + 24 * sCartao + TextoGdi.Medir(p.Nome, fTitulo).Width + 10 * sCartao;
+                if (p.Plano != null) Escrever(g, p.Plano.T(), fPeq, pal.TintaFraca, xPlano, y, x + w - xPlano, hTit, StringAlignment.Far, fTitulo);
             }
             y += hTit + 4 * sCartao;
 

@@ -131,11 +131,12 @@ namespace Pulso
         }
 
         // O múltiplo do Max só aparece no nível de limite (claude_max + default_claude_max_5x); o Pro é claude_pro +
-        // default_claude_ai. Nulo nos outros (Team, Enterprise…): sem ponto de partida para a calibração
+        // default_claude_ai. O Ultra é o antigo Max 20x, com o mesmo código (e "ultra", se um dia vier, é ele também).
+        // Nulo nos outros (Team, Enterprise…): sem ponto de partida para a calibração
         static string Plano(string tipo, string nivel)
         {
             nivel = nivel ?? "";
-            if (nivel.EndsWith("max_20x")) return "max_20x";
+            if (nivel.EndsWith("max_20x") || nivel.Contains("ultra") || tipo == "claude_ultra") return "max_20x";
             if (nivel.EndsWith("max_5x")) return "max_5x";
             return tipo == "claude_pro" ? "pro" : null;
         }
@@ -189,7 +190,7 @@ namespace Pulso
                 Nota("Entre no Claude Code para ver o consumo exato", true);
                 return;
             }
-            if (plano != null) lock (Estado.Trava) Estado.Claude.Plano = Rotulos.Plano(plano);
+            if (plano != null) lock (Estado.Trava) Estado.Claude.Plano = plano;
             // Token vencido recebe 429 com espera de ~1 h; melhor aguardar o Claude Code renová-lo
             if (expira.HasValue && expira.Value <= DateTime.UtcNow.AddSeconds(30))
             {
@@ -267,6 +268,9 @@ namespace Pulso
                     var j = Nova(id, pct.Value, Json.Data(l, "resets_at"));
                     string modelo = Json.Str(l, "scope", "model", "displayName");
                     if (modelo != null && id != "session" && id != "weekly_all") j.Rotulo = "Semana ({0})".T(modelo);
+                    // De qual modelo é a janela (o servidor responde em snake_case): só para a estimativa, o rótulo não muda
+                    if (id != "session" && id != "weekly_all")
+                        j.Modelo = ClaudeSessoes.Familia(Json.Str(l, "scope", "model", "display_name") ?? modelo) ?? j.Modelo;
                     if (!r.ContainsKey(id)) r[id] = j;
                 }
             }
@@ -305,8 +309,8 @@ namespace Pulso
             {
                 case "session": j.Rotulo = "Sessão (5h)"; j.Minutos = 300; break;
                 case "weekly_all": j.Rotulo = "Semana"; j.Minutos = 10080; j.Semanal = true; break;
-                case "weekly_opus": j.Rotulo = "Semana (Opus)"; j.Minutos = 10080; j.Semanal = true; break;
-                case "weekly_sonnet": j.Rotulo = "Semana (Sonnet)"; j.Minutos = 10080; j.Semanal = true; break;
+                case "weekly_opus": j.Rotulo = "Semana (Opus)"; j.Minutos = 10080; j.Semanal = true; j.Modelo = "opus"; break;
+                case "weekly_sonnet": j.Rotulo = "Semana (Sonnet)"; j.Minutos = 10080; j.Semanal = true; j.Modelo = "sonnet"; break;
                 case "weekly_scoped": j.Rotulo = "Semana (por modelo)"; j.Minutos = 10080; j.Semanal = true; break;
                 default:
                     j.Rotulo = char.ToUpperInvariant(id[0]) + id.Substring(1).Replace('_', ' ');
@@ -328,7 +332,8 @@ namespace Pulso
                 token = Json.Str(c, "accessToken");
                 if (string.IsNullOrEmpty(token)) continue;
                 expira = Json.Data(c, "expiresAt");
-                plano = Json.Str(c, "subscriptionType");
+                // Nome para a tela: o tipo de assinatura sozinho não separa o Max do Ultra (os dois são "max")
+                plano = Rotulos.PlanoClaude(Json.Str(c, "subscriptionType"), Json.Str(c, "rateLimitTier"));
                 return true;
             }
             return false;

@@ -19,12 +19,16 @@ namespace Pulso
         Timer relogio;
         DateTime ultimaConsulta = DateTime.MinValue, esperaAte = DateTime.MinValue;
         int consultando, falhas;
+        volatile bool urgente;   // limite atingido: consulta sem esperar os 5 min (a espera pedida pelo servidor vale)
 
         public void Iniciar()
         {
-            sessoes.Iniciar();
+            // O cliente nasce antes da leitura dos arquivos: aberto depois de um estouro, o limite atingido pede o servidor
+            // já dentro de sessoes.Iniciar, e sem cliente a consulta quebrava e esperava 5 min
             http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Pulso/1.0 (Windows)");
+            sessoes.LimiteAtingido += delegate { urgente = true; ultimaConsulta = DateTime.MinValue; Tique(); };
+            sessoes.Iniciar();
             relogio = new Timer(delegate { Tique(); }, null, 3000, 3000);
         }
 
@@ -38,14 +42,16 @@ namespace Pulso
             DateTime? confirmado;
             lock (Estado.Trava) confirmado = Estado.Codex.Confirmado;
             // Dado da sessão com menos de 5 min é melhor que o do servidor; só consulta quando ficou velho
-            if (confirmado.HasValue && (agora - confirmado.Value).TotalMinutes < 5) return;
-            if ((agora - ultimaConsulta).TotalMinutes < 5) return;
+            if (!urgente && confirmado.HasValue && (agora - confirmado.Value).TotalMinutes < 5) return;
+            if (!urgente && (agora - ultimaConsulta).TotalMinutes < 5) return;
             if (!File.Exists(Caminhos.CodexAuth)) return;
             if (Interlocked.Exchange(ref consultando, 1) == 1) return;
             ultimaConsulta = agora;
+            bool eraUrgente = urgente;
+            urgente = false;
             Task.Factory.StartNew(delegate
             {
-                try { Consultar(); falhas = 0; }
+                try { Consultar(eraUrgente); falhas = 0; }
                 catch (Exception e)
                 {
                     falhas++;
@@ -62,7 +68,7 @@ namespace Pulso
             return e;
         }
 
-        void Consultar()
+        void Consultar(bool limiteAtingido)
         {
             var auth = Json.Parse(Caminhos.LerCompartilhado(Caminhos.CodexAuth));
             string token = Json.Str(auth, "tokens", "access_token");
@@ -98,12 +104,13 @@ namespace Pulso
                 lock (Estado.Trava)
                 {
                     var p = Estado.Codex;
-                    // Um evento de sessão mais novo pode ter chegado enquanto a consulta corria
-                    if (p.Confirmado.HasValue && (DateTime.UtcNow - p.Confirmado.Value).TotalSeconds < 30) return;
+                    // Um evento de sessão mais novo pode ter chegado enquanto a consulta corria (no limite atingido, não: a
+                    // sessão parou de gravar números e o servidor é quem confirma os 100%)
+                    if (!limiteAtingido && p.Confirmado.HasValue && (DateTime.UtcNow - p.Confirmado.Value).TotalSeconds < 30) return;
                     p.Janelas.Clear();
                     p.Janelas.AddRange(janelas);
                     string plano = Json.Str(o, "plan_type");
-                    if (plano != null) p.Plano = Rotulos.Plano(plano);
+                    if (plano != null) p.Plano = Rotulos.PlanoCodex(plano);
                     p.Confirmado = DateTime.UtcNow;
                     p.Fonte = "servidor do Codex";
                     var principal = p.PorId("primary");

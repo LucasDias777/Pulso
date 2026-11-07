@@ -27,12 +27,14 @@ namespace Pulso
         // na sessão; a semana pela mesma proporção, 4,1x a do Max 5x). O Pro deu 4,1x e não os 5x oficiais porque o medidor
         // da Anthropic pesa a escrita de cache ~2,4x o preço (no Max o k sobe de 0,0048 a 0,0064 com a escrita de 13% a 40%)
         // e as horas do Pro tiveram menos escrita (11% contra 25%); descontado isso, Pro/Max 5x = 4,9x. Max 20x sem medida:
-        // Max 5x ÷ 4 (0,00139) e Pro ÷ 20 corrigido para o uso do Max (0,00135) concordam
+        // Max 5x ÷ 4 (0,00139) e Pro ÷ 20 corrigido para o uso do Max (0,00135) concordam. O Max 20x virou Ultra no fim de
+        // 10/2026: 10x a semana do Pro (o dobro do Max 5x), com a semana do Fable até metade dela e sem limite de 5h na conta
+        // verificada (a sessão fica só para a conta ainda não verificada). Sem medida: as duas semanas = Max 5x ÷ 2
         static readonly Dictionary<string, Dictionary<string, double>> PartidaPorPlano = new Dictionary<string, Dictionary<string, double>>
         {
             { "pro", new Dictionary<string, double> { { "session", 0.0231 }, { "weekly_all", 0.0031 } } },
             { "max_5x", new Dictionary<string, double> { { "session", 0.0056 }, { "weekly_all", 0.00076 }, { "weekly_scoped", 0.0035 } } },
-            { "max_20x", new Dictionary<string, double> { { "session", 0.00137 } } },
+            { "max_20x", new Dictionary<string, double> { { "session", 0.00137 }, { "weekly_all", 0.00038 }, { "weekly_scoped", 0.00175 } } },
         };
         static readonly object trava = new object();
         static DateTime ultimaGravacao = DateTime.MinValue;
@@ -129,6 +131,7 @@ namespace Pulso
                     ResetaEm = Json.Data(j, "resetaEm"),
                     Minutos = (int)(Json.Num(j, "minutos") ?? 0),
                     Semanal = Json.Bool(j, "semanal") == true,
+                    Modelo = Json.Str(j, "modelo"),
                 });
             }
         }
@@ -141,7 +144,7 @@ namespace Pulso
                 {
                     { "id", j.Id }, { "rotulo", j.Rotulo }, { "usado", j.Usado },
                     { "resetaEm", j.ResetaEm.HasValue ? (object)Tempo.UnixMs(j.ResetaEm.Value) : null },
-                    { "minutos", j.Minutos }, { "semanal", j.Semanal },
+                    { "minutos", j.Minutos }, { "semanal", j.Semanal }, { "modelo", j.Modelo },
                 });
             return new Dictionary<string, object>
             {

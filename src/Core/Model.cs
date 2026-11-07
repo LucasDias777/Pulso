@@ -19,6 +19,7 @@ namespace Pulso
         public bool Semanal;
         public int? Contagem;         // janela só de contagem (ex.: requisições hoje, sem limite publicado)
         public string Grupo;          // título que agrupa janelas no cartão (ex.: "Modelos Gemini")
+        public string Modelo;         // janela semanal de um modelo só: a família dele ("fable", "opus"…); nula = todos os modelos
 
         public double Atual { get { return Estimado.HasValue ? Math.Max(Usado, Estimado.Value) : Usado; } }
 
