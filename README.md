@@ -31,7 +31,7 @@
 <p>
   <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10_|_11-0078D4?style=for-the-badge" />
   <img alt=".NET Framework 4.8" src="https://img.shields.io/badge/.NET_Framework-4.8-512BD4?style=for-the-badge" />
-  <img alt="Versão 1.6" src="https://img.shields.io/badge/Vers%C3%A3o-1.6-00c46a?style=for-the-badge" />
+  <img alt="Versão 1.6.1" src="https://img.shields.io/badge/Vers%C3%A3o-1.6.1-00c46a?style=for-the-badge" />
 </p>
 
 <br/>

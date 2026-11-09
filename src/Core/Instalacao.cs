@@ -10,8 +10,9 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Pulso")]
 [assembly: AssemblyProduct("Pulso")]
 [assembly: AssemblyCompany("Lucas Dias")]
-[assembly: AssemblyVersion(Pulso.Instalacao.Versao + ".0.0")]
-[assembly: AssemblyFileVersion(Pulso.Instalacao.Versao + ".0.0")]
+// A versão tem 2 ou 3 partes ("1.6", "1.6.1"); a do assembly aceita no máximo 4
+[assembly: AssemblyVersion(Pulso.Instalacao.Versao + ".0")]
+[assembly: AssemblyFileVersion(Pulso.Instalacao.Versao + ".0")]
 
 namespace Pulso
 {
@@ -21,7 +22,7 @@ namespace Pulso
     // próprio exe com --desinstalar). Instalar, atualizar e desinstalar passam pelo Assistente: nenhum console à vista.
     static class Instalacao
     {
-        public const string Versao = "1.6";
+        public const string Versao = "1.6.1";
         const string ChaveApp = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pulso";
 
         public static string Pasta

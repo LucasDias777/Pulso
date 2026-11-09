@@ -182,7 +182,9 @@ namespace Pulso
         // números não chegaram a 100%, a janela mais cheia é a que estourou; e pede a leitura exata do servidor na hora.
         // Só marca a partir de 90%: abaixo disso o número conhecido está velho (uso em outro PC ou na web) e a marca podia
         // cair na janela errada; quando o servidor a corrigisse, a queda de 10 pontos virava um aviso falso de "renovado".
-        // Na mesma janela o uso só sobe, então de 90% a correção nunca cai 10 pontos
+        // Na mesma janela o uso só sobe, então de 90% a correção nunca cai 10 pontos. A janela mais cheia que já passou da
+        // renovação não é marcada (nem outra no lugar dela): o estouro foi dela, e com o Pulso fechado até depois da
+        // renovação a partida mostrava 100% numa cota já zerada até o servidor responder
         bool Atingido()
         {
             bool mudou = false;
@@ -190,7 +192,8 @@ namespace Pulso
             {
                 Janela cheia = null;
                 foreach (var j in Estado.Codex.Janelas) if (cheia == null || j.Usado > cheia.Usado) cheia = j;
-                if (cheia != null && cheia.Usado >= 0.9 && cheia.Usado < 1) { cheia.Usado = 1; mudou = true; }
+                bool renovada = cheia != null && cheia.ResetaEm.HasValue && cheia.ResetaEm.Value <= DateTime.UtcNow;
+                if (cheia != null && !renovada && cheia.Usado >= 0.9 && cheia.Usado < 1) { cheia.Usado = 1; mudou = true; }
             }
             Log.Info("codex: limite atingido" + (mudou ? "; janela mais cheia marcada como esgotada" : "") + ", pedindo a leitura do servidor");
             var h = LimiteAtingido;
