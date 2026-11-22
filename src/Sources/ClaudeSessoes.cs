@@ -260,14 +260,15 @@ namespace Pulso
         // mas a proporção entre modelos segue o preço; a escala é calibrada contra as leituras exatas.
         static double Custo(string modelo, IDictionary<string, object> uso)
         {
-            double entrada, saida, leitura;
-            Precos(modelo ?? "", out entrada, out saida, out leitura);
             double inp = Json.Num(uso, "input_tokens") ?? 0;
             double outp = Json.Num(uso, "output_tokens") ?? 0;
             double lido = Json.Num(uso, "cache_read_input_tokens") ?? 0;
             double criado5 = Json.Num(uso, "cache_creation", "ephemeral_5m_input_tokens") ?? -1;
             double criado1h = Json.Num(uso, "cache_creation", "ephemeral_1h_input_tokens") ?? 0;
             if (criado5 < 0) criado5 = Json.Num(uso, "cache_creation_input_tokens") ?? 0;
+            double entrada, saida, leitura;
+            // O tamanho do prompt conta toda a entrada do pedido, cache lido e gravado inclusive (faixa do Haiku 5.5)
+            Precos(modelo ?? "", inp + lido + criado5 + criado1h, out entrada, out saida, out leitura);
             return (inp * entrada + outp * saida + lido * leitura + criado5 * entrada * 1.25 + criado1h * entrada * 2) / 1e6;
         }
 
@@ -283,16 +284,22 @@ namespace Pulso
             };
         }
 
-        // US$ por milhão de tokens: entrada, saída, leitura de cache
-        static void Precos(string m, out double entrada, out double saida, out double leitura)
+        // US$ por milhão de tokens: entrada, saída, leitura de cache (página de preços da Anthropic, 22/11/2026). A gravação
+        // de cache sai da entrada (1,25x em 5 min, 2x em 1 h). prompt: tokens de entrada do pedido, para a faixa do Haiku 5.5
+        static void Precos(string m, double prompt, out double entrada, out double saida, out double leitura)
         {
             m = m.ToLowerInvariant();
-            if (m.Contains("fable") || m.Contains("mythos")) { entrada = 10; saida = 50; leitura = 0.25; }
+            if (m.Contains("fable-5-1") || m.Contains("mythos-5-1")) { entrada = 10; saida = 50; leitura = 0.25; }
+            else if (m.EndsWith("fable-5") || m.EndsWith("mythos-5")) { entrada = 10; saida = 50; leitura = 1; }
+            else if (m.Contains("fable") || m.Contains("mythos")) { entrada = 8; saida = 40; leitura = 0.20; }   // 5.2 e as seguintes
             else if (m.Contains("opus-5-5")) { entrada = 4; saida = 20; leitura = 0.20; }
             else if (m.Contains("opus-4-1") || m.Contains("opus-4-2025") || m.Contains("opus-4-0") || m == "claude-opus-4") { entrada = 15; saida = 75; leitura = 1.5; }
             else if (m.Contains("opus")) { entrada = 5; saida = 25; leitura = 0.5; }
+            else if (m.Contains("sonnet-5-5")) { entrada = 2; saida = 10; leitura = 0.10; }
             else if (m.Contains("sonnet-5")) { entrada = 2; saida = 10; leitura = 0.20; }
             else if (m.Contains("sonnet")) { entrada = 3; saida = 15; leitura = 0.30; }
+            // Haiku 5.5: o pedido com mais de 100 mil tokens de prompt paga o preço maior por inteiro
+            else if (m.Contains("haiku-5")) { if (prompt > 100000) { entrada = 0.50; saida = 2.50; leitura = 0.05; } else { entrada = 0.10; saida = 0.50; leitura = 0.01; } }
             else if (m.Contains("haiku")) { entrada = 1; saida = 5; leitura = 0.10; }
             else if (m.Contains("synthetic") || m.Length == 0) { entrada = 0; saida = 0; leitura = 0; }
             else { entrada = 4; saida = 20; leitura = 0.20; }
